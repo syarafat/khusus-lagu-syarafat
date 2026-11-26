@@ -163,7 +163,7 @@ export function layoutDock() {
 }
 
 function renderModes() {
-  ['#pShuffle', '#npShuffle'].forEach((sel) => {
+  ['#pShuffle', '#npShuffle', '#pShuffleMini'].forEach((sel) => {
     const b = $(sel);
     b.classList.toggle('on', player.shuffle);
     b.title = player.shuffle ? 'Acak: aktif' : 'Acak: mati';

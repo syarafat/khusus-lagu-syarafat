@@ -182,7 +182,7 @@ function emptyState({ ic = 'note', title, text, actions = '' }) {
 }
 
 const addButtons = `
-  <button class="btn primary" data-act="pick-files">${icon('upload')} Pilih file lagu</button>
+  <button class="btn primary" data-act="pick-files">${icon('upload')} Pilih lagu / video</button>
   <a class="btn ghost" href="#/sources">${icon('globe')} Dari mana dapat lagu?</a>`;
 
 // ---------- Beranda ----------
@@ -211,10 +211,10 @@ export function homeView() {
       <section class="welcome">
         <div class="welcome-art">${icon('wave')}</div>
         <h2>Selamat datang di ${APP_NAME}</h2>
-        <p>Pemutar musik pribadimu: <b>tanpa iklan</b>, tanpa akun, dan bisa diputar <b>tanpa internet</b>. Semua lagu tersimpan di perangkat ini.</p>
+        <p>Pemutar musik pribadimu: <b>tanpa iklan</b>, tanpa akun, dan bisa diputar <b>tanpa internet</b>. Semua lagu tersimpan di perangkat ini. Punya video musik? Masukkan saja — otomatis diubah jadi MP3.</p>
         <div class="btn-row center">${addButtons}</div>
         <ol class="steps">
-          <li><span><b>Tambah lagu</b> dari file di HP/laptop (MP3, M4A, FLAC, dll.) atau dari link.</span></li>
+          <li><span><b>Tambah lagu</b> dari file MP3 di HP/laptop — atau pilih <b>video</b>, otomatis diubah jadi MP3.</span></li>
           <li><span><b>Buat playlist</b> dan tandai lagu favorit dengan ${icon('heart')}.</span></li>
           <li><span><b>Pasang aplikasi</b> ke layar utama supaya terasa seperti aplikasi biasa.</span></li>
         </ol>
@@ -240,6 +240,10 @@ export function homeView() {
   return {
     title: 'Beranda',
     html: `${head}
+      <div class="home-actions">
+        <button class="btn primary" data-act="shuffle-list" data-list="all">${icon('shuffle')} Acak semua lagu</button>
+        <button class="btn ghost" data-act="play-list" data-list="all">${icon('play')} Putar berurutan</button>
+      </div>
       <div class="tiles">${tiles.join('')}</div>
       ${shelf('Terakhir diputar', recent.map((s, i) => songCard(s, 'recent', i)))}
       ${shelf('Baru ditambahkan', added.map((s, i) => songCard(s, 'added', i)), '<a class="sec-link" href="#/library">Lihat semua</a>')}
@@ -435,34 +439,28 @@ export function addView() {
       <p class="lead">Lagu disimpan langsung di perangkat ini, jadi bisa diputar kapan saja <b>tanpa internet</b> dan <b>tanpa iklan</b>.</p>
       <div class="drop-zone" id="dropZone">
         <div class="dz-ic">${icon('upload')}</div>
-        <strong class="desktop-only">Seret &amp; lepas file lagu ke sini</strong>
-        <strong class="mobile-only">Pilih lagu dari HP kamu</strong>
+        <strong class="desktop-only">Seret &amp; lepas lagu atau video ke sini</strong>
+        <strong class="mobile-only">Pilih lagu atau video dari HP kamu</strong>
         <span class="muted desktop-only">atau</span>
         <div class="btn-row center">
-          <button class="btn primary" data-act="pick-files">${icon('note')} Pilih file lagu</button>
+          <button class="btn primary" data-act="pick-files">${icon('note')} Pilih lagu / video</button>
           <button class="btn ghost" data-act="pick-folder">${icon('folder')} Pilih satu folder</button>
         </div>
-        <small class="muted">Bisa pilih banyak sekaligus · MP3, M4A/AAC, FLAC, WAV, OGG, OPUS</small>
+        <small class="muted">Bisa pilih banyak sekaligus · Lagu: MP3, M4A, FLAC, WAV, OGG · Video: MP4, WEBM, MOV, MKV, 3GP</small>
+      </div>
+      <div class="convert-note">
+        <div class="cn-ic">${icon('wave')}</div>
+        <div><b>Video otomatis diubah jadi MP3.</b> Hanya suaranya yang disimpan (videonya tidak), jadi hemat memori dan kamu cukup mendengarkan. Prosesnya berjalan di HP-mu sendiri tanpa internet — biarkan aplikasi tetap terbuka sampai selesai.</div>
       </div>
       <div id="importBox"></div>
 
       <section class="panel" id="linkPanel">
-        <h2>${icon('link')} Tambah dari link YouTube / YouTube Music</h2>
-        <p class="muted">Tempel link lagu dari <b>YouTube</b> atau <b>YouTube Music</b> (bisa beberapa link sekaligus, satu per baris). Link langsung ke file audio (mis. berakhiran <code>.mp3</code>) juga bisa.</p>
+        <h2>${icon('link')} Tambah dari link file</h2>
+        <p class="muted">Punya link <b>langsung ke file lagu/video</b> (biasanya berakhiran <code>.mp3</code> atau <code>.mp4</code>)? Tempel di sini, bisa beberapa link sekaligus (satu per baris). Jika server mengizinkan, file diunduh (video diubah ke MP3) agar bisa diputar offline.</p>
         <form class="url-form" id="urlForm">
-          <textarea class="input" id="urlInput" rows="3" placeholder="https://youtu.be/…&#10;https://music.youtube.com/watch?v=…" required autocomplete="off" spellcheck="false"></textarea>
+          <textarea class="input" id="urlInput" rows="2" placeholder="https://contoh.com/lagu.mp3" required autocomplete="off" spellcheck="false"></textarea>
           <button class="btn primary" type="submit">Tambah</button>
         </form>
-        <div class="yt-note">
-          <b>Cara kerja lagu dari YouTube:</b> lagu diputar lewat <b>player resmi YouTube</b> di dalam aplikasi (tidak diunduh), jadi:
-          <ul>
-            <li>butuh <b>internet</b> dan videonya tampil di layar;</li>
-            <li>YouTube bisa saja menampilkan <b>iklan</b> di videonya;</li>
-            <li>berhenti saat layar HP dikunci atau aplikasi ditutup (aturan YouTube);</li>
-            <li>beberapa video tidak bisa diputar di luar YouTube karena dibatasi pemiliknya — coba versi "Topic", "Lyrics", atau audio.</li>
-          </ul>
-          Untuk lagu yang benar-benar <b>tanpa iklan &amp; bisa offline</b>, pakai file lagu milikmu (tombol "Pilih file lagu" di atas).
-        </div>
       </section>
 
       <section class="panel">
@@ -474,10 +472,11 @@ export function addView() {
       <section class="panel">
         <h2>${icon('info')} Tips</h2>
         <ul class="tips">
-          <li><b>Di HP Android:</b> lagu biasanya ada di folder <i>Download</i>, <i>Music</i>, atau <i>WhatsApp/Media/WhatsApp Audio</i>.</li>
+          <li><b>Di HP Android:</b> lagu biasanya ada di folder <i>Download</i>, <i>Music</i>, atau <i>WhatsApp/Media/WhatsApp Audio</i>; video di <i>DCIM</i>, <i>Movies</i>, atau <i>Download</i>.</li>
           <li><b>Pindah dari laptop ke HP:</b> pakai kabel USB, Quick Share/Nearby Share, atau unggah ke Google Drive lalu unduh di HP.</li>
           <li><b>Di laptop:</b> seret banyak file atau satu folder sekaligus ke jendela aplikasi ini.</li>
-          <li><b>Bagikan ke aplikasi:</b> setelah aplikasi dipasang di Android, kamu bisa memilih file lagu di aplikasi File — atau menekan <i>Bagikan</i> di aplikasi YouTube / YouTube Music — lalu pilih <i>${APP_NAME}</i>.</li>
+          <li><b>Video di galeri HP:</b> pilih lewat tombol di atas — atau setelah aplikasi dipasang, buka video di Galeri/File lalu <i>Bagikan → ${APP_NAME}</i>.</li>
+          <li><b>Lama proses video:</b> umumnya beberapa detik sampai ±1 menit per lagu, tergantung panjang video dan kecepatan HP.</li>
           <li>Judul, artis, album, dan sampul dibaca otomatis dari file. Bisa diubah lewat menu ${icon('more')} → <i>Edit info lagu</i>.</li>
         </ul>
       </section>`,
@@ -531,7 +530,8 @@ export function sourcesView() {
         <ul class="tips">
           <li>Lagu yang "diunduh" di aplikasi langganan (Spotify, Joox, YouTube Music, Apple Music) terkunci DRM dan <b>tidak bisa</b> dipindahkan ke aplikasi lain.</li>
           <li>Hindari situs "download MP3 gratis" atau konverter YouTube: umumnya melanggar hak cipta dan penuh iklan atau malware.</li>
-          <li>Punya link langsung ke file audio? Tempel di <a href="#/add">Tambah Lagu → Tambah dari link</a>.</li>
+          <li>Punya link langsung ke file audio? Tempel di <a href="#/add">Tambah Lagu → Tambah dari link file</a>.</li>
+          <li>Punya video musik di HP (rekaman konser, video dari teman, video yang kamu beli)? Tambahkan saja — otomatis diubah ke MP3.</li>
         </ul>
       </section>`,
   };

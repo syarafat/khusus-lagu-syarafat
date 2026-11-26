@@ -27,13 +27,10 @@
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url",
       "files": [
         {
           "name": "audio",
-          "accept": ["audio/*", ".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg", ".opus"]
+          "accept": ["audio/*", "video/*", ".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg", ".opus", ".mp4", ".webm", ".mov", ".mkv", ".3gp"]
         }
       ]
     }

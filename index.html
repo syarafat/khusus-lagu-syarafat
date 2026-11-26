@@ -81,6 +81,7 @@
         <input type="range" class="range vol" id="pVol" min="0" max="100" value="80" aria-label="Volume">
         <button class="icon-btn" data-act="open-np" title="Layar penuh" aria-label="Layar penuh"><i data-icon="expand"></i></button>
       </div>
+      <button class="icon-btn toggle mini-shuffle" id="pShuffleMini" data-act="shuffle" aria-label="Acak"><i data-icon="shuffle"></i></button>
       <button class="play-btn mini-play" id="pPlayMini" data-act="toggle" aria-label="Putar"><i data-icon="play"></i></button>
     </footer>
 
@@ -147,10 +148,10 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <div class="import-status" id="importStatus" hidden></div>
   <div class="drop-overlay" id="dropOverlay" hidden>
-    <div class="drop-card"><i data-icon="upload"></i><strong>Lepaskan untuk menambah lagu</strong><span>MP3, M4A, FLAC, WAV, OGG, OPUS</span></div>
+    <div class="drop-card"><i data-icon="upload"></i><strong>Lepaskan untuk menambah lagu</strong><span>Lagu (MP3, M4A, FLAC, WAV…) atau video — video otomatis diubah ke MP3</span></div>
   </div>
 
-  <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.oga,.opus,.webm,.weba,.aif,.aiff" multiple hidden>
+  <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.oga,.opus,.weba,.aif,.aiff,.mp4,.m4v,.mov,.webm,.mkv,.3gp" multiple hidden>
   <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
   <input type="file" id="coverInput" accept="image/*" hidden>
   <audio id="audio" preload="auto"></audio>

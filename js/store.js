@@ -65,7 +65,9 @@ export const store = {
     return this.all().filter((s) => s.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, n);
   },
   findDuplicate(fileName, size) {
-    for (const s of this.songs.values()) if (s.fileName === fileName && s.size === size) return s;
+    for (const s of this.songs.values()) {
+      if ((s.fileName === fileName && s.size === size) || (s.origName === fileName && s.origSize === size)) return s;
+    }
     return null;
   },
   totalBytes() {

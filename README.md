@@ -12,9 +12,11 @@ Aplikasi ini berupa *Progressive Web App* (PWA): dibuka lewat browser, lalu bisa
 
 - **Tambah lagu** dari file di HP/laptop (bisa banyak sekaligus atau satu folder),
   seret-lepas di laptop, dari **link** file audio, atau lewat menu **Bagikan** di Android.
-- **Link YouTube / YouTube Music**: tempel link (bisa banyak sekaligus) atau tekan *Bagikan*
-  di aplikasi YouTube → *Lagu Syarafat*. Lagu diputar lewat player resmi YouTube dan bisa
-  masuk playlist, antrean, acak, dsb. seperti lagu biasa.
+- **Video otomatis diubah jadi MP3**: pilih video (MP4, WEBM, MOV, MKV, 3GP) dan aplikasi
+  mengambil suaranya saja lalu menyimpannya sebagai MP3 128 kbps. Videonya tidak disimpan,
+  jadi hemat memori. Semua diproses di perangkat, tanpa internet.
+- **Acak (shuffle)**: tombol *Acak semua lagu* di Beranda, tombol 🔀 di pemutar (juga di
+  pemutar mini HP), dan tombol *Acak* di Pustaka, playlist, artis, dan album.
 - **Hapus lagu**: satu per satu (menu ⋯ → *Hapus lagu dari perangkat*) atau banyak
   sekaligus (tombol **Pilih** → centang → 🗑).
 - Judul, artis, album, dan **sampul dibaca otomatis** dari file (MP3, M4A, FLAC, OGG, OPUS, WAV).
@@ -68,25 +70,22 @@ python3 -m http.server 8000
 Mau file **APK** sungguhan? Setelah aplikasi online, masukkan link-nya di
 [PWABuilder](https://www.pwabuilder.com) untuk membuat paket Android.
 
-## Lagu dari YouTube / YouTube Music
+## Menambah video (diubah ke MP3)
 
-Buka **Tambah Lagu → Tambah dari link YouTube / YouTube Music**, tempel satu atau beberapa
-link (satu per baris), lalu ketuk **Tambah**. Judul, artis, dan sampul diambil otomatis.
-Setelah aplikasi terpasang di Android, kamu juga bisa menekan **Bagikan** di aplikasi
-YouTube / YouTube Music lalu memilih **Lagu Syarafat**.
+Buka **Tambah → Pilih lagu / video**, lalu pilih video dari galeri atau folder HP. Bisa
+dicampur dengan file MP3 dan bisa banyak sekaligus. Untuk setiap video, aplikasi akan:
 
-Karena memakai **player resmi YouTube** (lagu tidak diunduh — mengunduh dari YouTube
-melanggar aturan YouTube dan hak cipta):
+1. mengambil suaranya (videonya tidak disimpan),
+2. mengubahnya menjadi **MP3** (128 kbps),
+3. mengambil satu gambar dari video sebagai **sampul**,
+4. membaca judul/artis dari info video atau dari nama file (mis. `Artis - Judul.mp4`).
 
-- butuh **internet**, dan videonya tampil di layar (di jendela kecil atau di layar "Sedang diputar");
-- YouTube bisa saja menampilkan **iklan** di videonya;
-- pemutaran berhenti saat layar HP dikunci atau aplikasi diminimalkan (aturan YouTube);
-- beberapa video tidak bisa diputar di luar YouTube karena dibatasi pemiliknya — aplikasi
-  akan memberi tahu dan lanjut ke lagu berikutnya. Coba versi "Topic", "Lyrics", atau audio.
+Lama proses biasanya beberapa detik sampai ±1 menit per lagu, tergantung panjang video dan
+kecepatan HP. Biarkan aplikasi tetap terbuka sampai selesai. Batas ukuran video 350 MB.
+Video tanpa suara atau format yang tidak didukung browser (mis. AVI/WMV) akan dilewati
+dengan pesan.
 
-Untuk lagu yang benar-benar **tanpa iklan dan bisa offline**, gunakan file lagu milikmu.
-
-## Dari mana dapat lagu?
+## Dari mana dapat lagu?## Dari mana dapat lagu?
 
 Di dalam aplikasi ada halaman **Tambah Lagu → Dari mana dapat lagu?** Ringkasnya:
 
@@ -122,13 +121,16 @@ js/views.js           halaman-halaman (Beranda, Pustaka, Playlist, dst.)
 js/player.js          mesin pemutar, antrean, Media Session, timer tidur
 js/playerui.js        bar pemutar, layar "Sedang diputar", panel antrean
 js/actions.js         menu lagu, playlist, edit, hapus
-js/importer.js        proses tambah lagu (file, link, YouTube), sampul
-js/ytengine.js        pembungkus player resmi YouTube (IFrame API) agar mirip <audio>
+js/importer.js        proses tambah lagu (file & link), sampul
+js/convert.js         video → MP3 (ambil suara dengan Web Audio, sampul dari gambar video)
+js/mp3worker.js       encoder MP3 di Web Worker
+js/vendor/lame.min.js lamejs (LAME MP3 encoder), LGPL-3.0 — lihat js/vendor/LAME-LICENSE.txt
+js/ytengine.js        pemutar YouTube (hanya untuk lagu YouTube yang sudah terlanjur ditambahkan)
 js/metadata.js        pembaca tag ID3/FLAC/MP4/Ogg/WAV
 js/store.js, db.js    data di memori + IndexedDB
 sw.js                 service worker (offline & share target)
 ```
 
-Tidak ada *build step* dan tidak ada dependensi luar. Setiap kali mengubah file aplikasi,
+Tidak ada *build step*. Satu-satunya pustaka luar adalah encoder MP3 lamejs (disertakan di repo). Setiap kali mengubah file aplikasi,
 **naikkan `VERSION` di `sw.js`** agar pengguna mendapat notifikasi "Versi baru tersedia".
 Nama aplikasi bisa diganti di `index.html`, `manifest.webmanifest`, dan `APP_NAME` di `js/views.js`.

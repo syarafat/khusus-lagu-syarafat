@@ -145,12 +145,20 @@ let lastStatus = { running: false };
 let hideStatusTimer = 0;
 
 function statusHTML(st, big) {
-  const pct = st.total ? Math.round((st.done / st.total) * 100) : 0;
+  const part = st.running && st.note ? (st.pct || 0) / 100 : 0;
+  const pct = st.total ? Math.min(100, Math.round(((st.done + part) / st.total) * 100)) : 0;
+  const converting = st.running && st.note;
+  const head = st.running
+    ? (converting ? `${esc(st.note)}… ${st.pct || 0}%` : `Menambahkan lagu… ${st.done} dari ${st.total}`)
+    : 'Selesai';
+  const detail = st.running
+    ? `${st.total > 1 ? `${st.done + 1} dari ${st.total} · ` : ''}${esc(st.current)}`
+    : `${st.added} ditambahkan${st.converted ? ` (${st.converted} dari video)` : ''}${st.dup ? ` · ${st.dup} sudah ada` : ''}${st.failed?.length ? ` · ${st.failed.length} gagal` : ''}`;
   return `
     <div class="imp${big ? ' big' : ''}">
-      <div class="imp-head">${icon(st.running ? 'upload' : 'check')}<b>${st.running ? `Menambahkan lagu… ${st.done} dari ${st.total}` : 'Selesai'}</b></div>
+      <div class="imp-head">${icon(st.running ? (converting ? 'wave' : 'upload') : 'check')}<b>${head}</b></div>
       <div class="imp-bar"><div style="width:${pct}%"></div></div>
-      <small>${st.running ? esc(st.current) : `${st.added} ditambahkan${st.dup ? ` · ${st.dup} sudah ada` : ''}${st.failed?.length ? ` · ${st.failed.length} gagal` : ''}`}</small>
+      <small>${detail}</small>
     </div>`;
 }
 
@@ -174,15 +182,15 @@ onImportStatus((st) => { lastStatus = st; renderImportStatus(st); });
 async function runImport(files, opts = {}) {
   const summary = await importFiles(files, opts);
   if (summary.nothing) {
-    toast(summary.skipped ? 'File yang dipilih bukan file audio' : 'Tidak ada file yang dipilih', { kind: 'warn' });
+    toast(summary.skipped ? 'File yang dipilih bukan lagu atau video' : 'Tidak ada file yang dipilih', { kind: 'warn' });
     return;
   }
   const n = summary.added.length;
   const parts = [];
-  if (n) parts.push(`${n} lagu ditambahkan`);
+  if (n) parts.push(`${n} lagu ditambahkan${summary.converted ? ` (${summary.converted} dari video → MP3)` : ''}`);
   if (summary.dup) parts.push(`${summary.dup} sudah ada`);
   if (summary.failed.length) parts.push(`${summary.failed.length} gagal`);
-  if (summary.skipped) parts.push(`${summary.skipped} bukan audio`);
+  if (summary.skipped) parts.push(`${summary.skipped} bukan lagu/video`);
   const msg = parts.join(' · ') || 'Tidak ada lagu baru';
   if (summary.failed.length) {
     toast(msg, { kind: 'warn', action: { label: 'Detail', fn: () => showFailures(summary.failed) } });
@@ -222,7 +230,7 @@ function showFailures(list) {
   openModal({
     title: 'Lagu yang gagal ditambahkan',
     body: `<div class="info-list">${list.slice(0, 100).map((f) => `<div class="info-row"><span>${esc(f.name)}</span><b>${esc(f.reason)}</b></div>`).join('')}</div>
-      <p class="muted small">Format yang paling aman: MP3 atau M4A. Beberapa format (mis. WMA, ALAC di Android) tidak didukung browser.</p>`,
+      <p class="muted small">Format paling aman: MP3/M4A untuk lagu, MP4/WEBM untuk video. Beberapa format (mis. WMA, AVI, ALAC di Android) tidak didukung browser.</p>`,
     actions: [{ label: 'Tutup', kind: 'primary' }],
   });
 }
@@ -631,10 +639,8 @@ function setupPWA() {
     history.replaceState(null, '', location.pathname + (location.hash || '#/add'));
     readShareInbox().then((items) => {
       const files = items.filter((x) => x instanceof Blob);
-      const texts = items.filter((x) => typeof x === 'string');
       if (files.length) runImport(files);
-      if (texts.length) runLinkImport(texts.join('\n'));
-      if (!items.length && params.get('shared') === 'error') toast('Yang dibagikan tidak bisa dibaca', { kind: 'warn' });
+      else if (params.get('shared') === 'error') toast('File yang dibagikan tidak bisa dibaca', { kind: 'warn' });
     });
   }
 

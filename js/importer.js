@@ -1,9 +1,10 @@
 // Proses menambah lagu: baca tag, durasi, sampul, lalu simpan.
 import { store, uid } from './store.js';
-import { readTags, guessFromFilename, cleanTitle, parseVideoTitle } from './metadata.js';
-import { parseYouTubeId, isYouTubeUrl } from './ytengine.js';
+import { readTags, guessFromFilename, cleanTitle } from './metadata.js';
+import { isYouTubeUrl } from './ytengine.js';
+import { isVideoFile, videoToMp3, captureFrame, ConvertError } from './convert.js';
 
-export const AUDIO_EXT = ['mp3', 'm4a', 'aac', 'mp4', 'flac', 'wav', 'ogg', 'oga', 'opus', 'webm', 'weba', 'aif', 'aiff', 'caf', '3gp', 'amr', 'm4b'];
+export const AUDIO_EXT = ['mp3', 'm4a', 'aac', 'flac', 'wav', 'ogg', 'oga', 'opus', 'weba', 'aif', 'aiff', 'caf', 'amr', 'm4b'];
 
 export function extOf(name) {
   const m = /\.([a-z0-9]{1,5})$/i.exec(name || '');
@@ -14,6 +15,11 @@ export function isAudioFile(f) {
   if (!f) return false;
   if (f.type && f.type.startsWith('audio/')) return true;
   return AUDIO_EXT.includes(extOf(f.name));
+}
+
+/** File yang bisa ditambahkan: lagu, atau video (diubah otomatis ke MP3). */
+export function isMediaFile(f) {
+  return isAudioFile(f) || isVideoFile(f);
 }
 
 /** Ambil durasi (detik) dengan elemen audio sementara. Gagal = format tak didukung. */
@@ -181,11 +187,61 @@ async function buildSong(file, extra = {}) {
   return { song, coverBlob };
 }
 
+/** Video → MP3: hanya suaranya yang disimpan, videonya tidak. */
+async function buildSongFromVideo(file, onProgress) {
+  const tags = await readTags(file);
+  const guess = guessFromFilename(file.name);
+  const { blob, duration } = await videoToMp3(file, onProgress);
+
+  let coverBlob = null;
+  let color = null;
+  onProgress(100, 'Membuat sampul');
+  const pic = tags.picture
+    ? new Blob([tags.picture.data], { type: tags.picture.mime })
+    : await captureFrame(file);
+  if (pic) {
+    try {
+      const res = await processCover(pic);
+      coverBlob = res.blob;
+      color = res.color;
+    } catch { /* tanpa sampul */ }
+  }
+  const title = cleanTitle(tags.title) || guess.title;
+  const artist = tags.artist || tags.albumArtist || guess.artist || 'Artis tidak dikenal';
+  const base = file.name.replace(/\.[^.]+$/, '') || 'lagu';
+  const song = {
+    id: uid(),
+    title,
+    artist,
+    album: tags.album || '',
+    albumArtist: tags.albumArtist || '',
+    year: tags.year || '',
+    track: tags.track || 0,
+    duration,
+    size: blob.size,
+    type: 'audio/mpeg',
+    fileName: `${base}.mp3`,
+    origName: file.name,
+    origSize: file.size,
+    convertedFrom: 'video',
+    source: 'file',
+    hasCover: !!coverBlob,
+    color: color || placeholderColor(artist + title),
+    liked: false,
+    likedAt: 0,
+    addedAt: Date.now(),
+    playCount: 0,
+    lastPlayed: 0,
+  };
+  return { song, coverBlob, audioBlob: blob };
+}
+
 // ---------- Antrean impor global (agar beberapa impor tidak tabrakan) ----------
-const status = { running: false, total: 0, done: 0, current: '', added: 0, dup: 0, failed: [], skipped: 0 };
+const status = { running: false, total: 0, done: 0, current: '', note: '', pct: 0, added: 0, converted: 0, dup: 0, failed: [], skipped: 0 };
 const statusListeners = new Set();
 let pending = [];
 let finishedCallbacks = [];
+let looping = false;
 
 export function onImportStatus(fn) {
   statusListeners.add(fn);
@@ -199,7 +255,7 @@ function emitStatus() { statusListeners.forEach((fn) => fn({ ...status })); }
  */
 export function importFiles(fileList, opts = {}) {
   const files = [...fileList];
-  const audio = files.filter(isAudioFile);
+  const audio = files.filter(isMediaFile);
   const skipped = files.length - audio.length;
   return new Promise((resolve) => {
     if (!audio.length) {
@@ -208,13 +264,16 @@ export function importFiles(fileList, opts = {}) {
     }
     pending.push(...audio.map((f) => ({ file: f, opts })));
     if (!status.running) {
-      Object.assign(status, { running: true, total: 0, done: 0, added: 0, dup: 0, failed: [], skipped: 0, addedIds: [] });
+      Object.assign(status, { running: true, total: 0, done: 0, added: 0, converted: 0, dup: 0, failed: [], skipped: 0, addedIds: [] });
     }
     status.total += audio.length;
     status.skipped += skipped;
     finishedCallbacks.push(resolve);
     emitStatus();
-    if (!importFiles.loop) importFiles.loop = runLoop();
+    if (!looping) {
+      looping = true; // diset sebelum runLoop: bisa selesai seketika (mis. semua file duplikat)
+      runLoop();
+    }
   });
 }
 
@@ -223,12 +282,27 @@ async function runLoop() {
     while (pending.length) {
       const { file, opts } = pending.shift();
       status.current = file.name;
+      status.note = '';
+      status.pct = 0;
       emitStatus();
       try {
         const dup = store.findDuplicate(file.name, file.size);
         if (dup) {
           status.dup++;
           if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [dup.id]);
+        } else if (isVideoFile(file)) {
+          let last = 0;
+          const { song, coverBlob, audioBlob } = await buildSongFromVideo(file, (pct, note) => {
+            status.pct = pct;
+            status.note = note;
+            const now = Date.now();
+            if (now - last > 200 || pct >= 100) { last = now; emitStatus(); }
+          });
+          await store.addSong(song, audioBlob, coverBlob);
+          status.added++;
+          status.converted++;
+          status.addedIds.push(song.id);
+          if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [song.id]);
         } else {
           const { song, coverBlob } = await buildSong(file);
           await store.addSong(song, file, coverBlob);
@@ -242,6 +316,8 @@ async function runLoop() {
           pending.forEach((p) => status.failed.push({ name: p.file.name, reason: 'Penyimpanan penuh' }));
           status.done += pending.length;
           pending = [];
+        } else if (err instanceof ConvertError) {
+          status.failed.push({ name: file.name, reason: err.message });
         } else if (err && err.message === 'unsupported') {
           status.failed.push({ name: file.name, reason: 'Format tidak didukung browser ini' });
         } else {
@@ -253,13 +329,14 @@ async function runLoop() {
       emitStatus();
     }
   } finally {
-    const summary = { added: status.addedIds, dup: status.dup, failed: status.failed, skipped: status.skipped };
+    const summary = { added: status.addedIds, converted: status.converted, dup: status.dup, failed: status.failed, skipped: status.skipped };
     status.running = false;
     status.current = '';
+    status.note = '';
     emitStatus();
     const cbs = finishedCallbacks;
     finishedCallbacks = [];
-    importFiles.loop = null;
+    looping = false;
     cbs.forEach((cb) => cb(summary));
   }
 }
@@ -323,88 +400,8 @@ export async function importFromUrl(rawUrl) {
 }
 
 
-// ---------- YouTube / YouTube Music ----------
-async function fetchYouTubeMeta(id) {
-  const watch = `https://www.youtube.com/watch?v=${id}`;
-  let res;
-  try {
-    res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`);
-  } catch {
-    // coba layanan cadangan
-    try {
-      const r2 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(watch)}`);
-      const j = await r2.json();
-      if (j && j.title) return j;
-    } catch { /* abaikan */ }
-    throw new Error('Butuh koneksi internet untuk menambah lagu dari YouTube.');
-  }
-  if (res.status === 401 || res.status === 403) throw new Error('Pemilik video ini tidak mengizinkan diputar di aplikasi lain. Coba video lain (misalnya versi "Topic" atau lirik).');
-  if (res.status === 404 || res.status === 400) throw new Error('Video tidak ditemukan atau dijadikan privat.');
-  if (!res.ok) throw new Error('YouTube sedang tidak bisa dihubungi. Coba lagi nanti.');
-  return res.json();
-}
-
-async function fetchYouTubeCover(id) {
-  // maxresdefault (16:9, tanpa garis hitam) bila ada; jika tidak, hqdefault (4:3 dengan garis hitam)
-  const tries = [
-    { url: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, crop: null },
-    { url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, crop: { x: 0, y: 0.125, w: 1, h: 0.75 } },
-  ];
-  for (const t of tries) {
-    try {
-      const r = await fetch(t.url, { mode: 'cors' });
-      if (!r.ok) continue;
-      const blob = await r.blob();
-      if (blob.size < 2000) continue;
-      return await processCover(blob, t.crop);
-    } catch { /* coba berikutnya */ }
-  }
-  return null;
-}
-
-/** Tambah satu lagu dari link YouTube / YouTube Music. */
-export async function importYouTube(raw) {
-  const id = parseYouTubeId(raw);
-  if (!id) {
-    if (/[?&]list=/.test(raw)) throw new Error('Link playlist YouTube belum didukung. Tempel link lagunya satu per satu.');
-    throw new Error('Link YouTube tidak dikenali.');
-  }
-  const dup = store.findYouTube(id);
-  if (dup) return { dup: true, song: dup };
-  const meta = await fetchYouTubeMeta(id);
-  const { artist, title } = parseVideoTitle(meta.title, meta.author_name);
-  const cover = await fetchYouTubeCover(id);
-  const song = {
-    id: uid(),
-    title,
-    artist,
-    album: '',
-    albumArtist: '',
-    year: '',
-    track: 0,
-    duration: 0, // diketahui saat pertama kali diputar
-    size: 0,
-    type: 'video/youtube',
-    fileName: meta.title || '',
-    source: 'youtube',
-    ytId: id,
-    url: `https://www.youtube.com/watch?v=${id}`,
-    hasCover: !!cover,
-    remoteCover: cover ? null : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-    color: cover ? cover.color : placeholderColor(artist + title),
-    liked: false,
-    likedAt: 0,
-    addedAt: Date.now(),
-    playCount: 0,
-    lastPlayed: 0,
-  };
-  if (!cover) song.hasCover = true; // pakai gambar langsung dari YouTube
-  await store.addSong(song, null, cover ? cover.blob : null);
-  return { dup: false, song };
-}
-
 /**
- * Tambah banyak link sekaligus (YouTube, YouTube Music, atau link file audio).
+ * Tambah banyak link file audio sekaligus.
  * onProgress(done, total) dipanggil setiap selesai satu link.
  */
 export async function importLinks(text, onProgress = () => {}) {
@@ -419,8 +416,7 @@ export async function importLinks(text, onProgress = () => {}) {
     const link = links[i].replace(/[),.]+$/, '');
     try {
       if (isYouTubeUrl(link)) {
-        const r = await importYouTube(link);
-        if (r.dup) result.dup++; else result.added.push(r.song);
+        throw new Error('Link YouTube / YouTube Music tidak didukung. Gunakan link langsung ke file audio.');
       } else {
         const r = await importFromUrl(link);
         if (r.mode === 'download' && !r.summary.added.length) result.dup++;

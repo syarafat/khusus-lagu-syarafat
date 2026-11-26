@@ -1,6 +1,6 @@
 // Service worker: membuat aplikasi bisa dibuka tanpa internet & menerima file yang dibagikan.
 // Naikkan VERSION setiap kali file aplikasi diubah agar pengguna mendapat versi baru.
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const CACHE = `lagu-${VERSION}`;
 const ASSETS = [
   './',
@@ -19,6 +19,9 @@ const ASSETS = [
   'js/ui.js',
   'js/views.js',
   'js/ytengine.js',
+  'js/convert.js',
+  'js/mp3worker.js',
+  'js/vendor/lame.min.js',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -76,7 +79,7 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
-// ---------- Share target: "Bagikan → Lagu Syarafat" di Android ----------
+// ---------- Share target: "Bagikan → Lagu Syarafat" di Android (lagu & video) ----------
 function openInbox() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('lagu-inbox', 1);
@@ -90,11 +93,7 @@ async function handleShare(request) {
   const back = (q) => Response.redirect(new URL(`./?shared=${q}#/add`, self.registration.scope).href, 303);
   try {
     const form = await request.formData();
-    const files = form.getAll('audio').filter((f) => f && typeof f !== 'string');
-    // Link yang dibagikan dari aplikasi YouTube / YouTube Music (atau browser)
-    const text = ['url', 'text', 'title'].map((k) => form.get(k)).filter((v) => typeof v === 'string' && v).join(' ');
-    const links = text.match(/https?:\/\/[^\s<>"']+/g) || [];
-    const items = [...files, ...links];
+    const items = form.getAll('audio').filter((f) => f && typeof f !== 'string');
     const db = await openInbox();
     await new Promise((resolve, reject) => {
       const tx = db.transaction('files', 'readwrite');
