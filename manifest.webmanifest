@@ -1,0 +1,46 @@
+{
+  "name": "Lagu Syarafat",
+  "short_name": "Lagu Syarafat",
+  "description": "Pemutar musik pribadi tanpa iklan. Semua lagu tersimpan di perangkatmu dan bisa diputar tanpa internet.",
+  "id": "./",
+  "start_url": "./#/home",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050507",
+  "theme_color": "#050507",
+  "lang": "id",
+  "dir": "ltr",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Tambah lagu", "url": "./#/add", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Lagu Disukai", "url": "./#/liked", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "audio",
+          "accept": ["audio/*", ".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg", ".opus"]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "audio/*": [".mp3", ".m4a", ".aac", ".flac", ".wav", ".ogg", ".oga", ".opus"]
+      }
+    }
+  ]
+}

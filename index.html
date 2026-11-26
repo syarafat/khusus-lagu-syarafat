@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lagu Syarafat</title>
+  <meta name="description" content="Pemutar musik pribadi tanpa iklan. Semua lagu tersimpan di perangkatmu.">
+  <meta name="theme-color" content="#0b0b0f">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lagu">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Sidebar (desktop) -->
+    <aside class="sidebar" aria-label="Navigasi">
+      <a class="brand" href="#/home" aria-label="Beranda">
+        <img src="icons/icon.svg" alt="" width="32" height="32">
+        <span>Lagu Syarafat</span>
+      </a>
+      <nav class="side-nav">
+        <a href="#/home" data-nav="home"><i data-icon="home"></i><span>Beranda</span></a>
+        <a href="#/search" data-nav="search"><i data-icon="search"></i><span>Cari</span></a>
+        <a href="#/library" data-nav="library"><i data-icon="library"></i><span>Pustaka</span></a>
+        <a href="#/add" data-nav="add"><i data-icon="plusCircle"></i><span>Tambah Lagu</span></a>
+      </nav>
+      <div class="side-lib">
+        <div class="side-lib-head">
+          <span>Playlist kamu</span>
+          <button class="icon-btn sm" data-act="new-playlist" title="Buat playlist" aria-label="Buat playlist"><i data-icon="plus"></i></button>
+        </div>
+        <div class="side-playlists" id="sidePlaylists"></div>
+      </div>
+      <a class="side-settings" href="#/settings" data-nav="settings"><i data-icon="settings"></i><span>Pengaturan</span></a>
+    </aside>
+
+    <!-- Konten utama -->
+    <main class="main" id="main" tabindex="-1">
+      <div class="view" id="view"></div>
+    </main>
+
+    <!-- Panel antrean (desktop) / lembar (mobile) -->
+    <aside class="queue-panel" id="queuePanel" aria-label="Antrean" hidden></aside>
+
+    <!-- Bar pemutar -->
+    <footer class="player" id="player" data-empty="true">
+      <div class="p-progress-mini"><div class="p-progress-mini-fill" id="miniFill"></div></div>
+      <div class="p-left" data-act="open-np">
+        <div class="p-cover" id="pCover"></div>
+        <div class="p-meta">
+          <div class="p-title" id="pTitle">Belum ada lagu</div>
+          <div class="p-artist" id="pArtist">Tambahkan lagu untuk mulai</div>
+        </div>
+        <button class="icon-btn like-btn" id="pLike" data-act="like-current" title="Suka" aria-label="Suka"><i data-icon="heart"></i></button>
+      </div>
+      <div class="p-center">
+        <div class="p-controls">
+          <button class="icon-btn toggle" id="pShuffle" data-act="shuffle" title="Acak" aria-label="Acak"><i data-icon="shuffle"></i></button>
+          <button class="icon-btn" data-act="prev" title="Sebelumnya" aria-label="Sebelumnya"><i data-icon="prev"></i></button>
+          <button class="play-btn" id="pPlay" data-act="toggle" title="Putar" aria-label="Putar"><i data-icon="play"></i></button>
+          <button class="icon-btn" data-act="next" title="Berikutnya" aria-label="Berikutnya"><i data-icon="next"></i></button>
+          <button class="icon-btn toggle" id="pRepeat" data-act="repeat" title="Ulangi" aria-label="Ulangi"><i data-icon="repeat"></i></button>
+        </div>
+        <div class="p-seek">
+          <span class="time" id="pCur">0:00</span>
+          <input type="range" class="range" id="pSeek" min="0" max="1000" value="0" step="1" aria-label="Posisi lagu">
+          <span class="time" id="pDur">0:00</span>
+        </div>
+      </div>
+      <div class="p-right">
+        <button class="icon-btn toggle" id="pQueueBtn" data-act="queue" title="Antrean" aria-label="Antrean"><i data-icon="queue"></i></button>
+        <button class="icon-btn" id="pMute" data-act="mute" title="Bisukan" aria-label="Bisukan"><i data-icon="volume"></i></button>
+        <input type="range" class="range vol" id="pVol" min="0" max="100" value="80" aria-label="Volume">
+        <button class="icon-btn" data-act="open-np" title="Layar penuh" aria-label="Layar penuh"><i data-icon="expand"></i></button>
+      </div>
+      <button class="play-btn mini-play" id="pPlayMini" data-act="toggle" aria-label="Putar"><i data-icon="play"></i></button>
+    </footer>
+
+    <!-- Navigasi bawah (mobile) -->
+    <nav class="bottom-nav" aria-label="Navigasi">
+      <a href="#/home" data-nav="home"><i data-icon="home"></i><span>Beranda</span></a>
+      <a href="#/search" data-nav="search"><i data-icon="search"></i><span>Cari</span></a>
+      <a href="#/library" data-nav="library"><i data-icon="library"></i><span>Pustaka</span></a>
+      <a href="#/add" data-nav="add"><i data-icon="plusCircle"></i><span>Tambah</span></a>
+    </nav>
+  </div>
+
+  <!-- Layar "Sedang diputar" -->
+  <section class="np" id="np" aria-label="Sedang diputar" hidden>
+    <div class="np-bg"></div>
+    <div class="np-inner">
+      <header class="np-top">
+        <button class="icon-btn" data-act="close-np" aria-label="Tutup"><i data-icon="chevronDown"></i></button>
+        <div class="np-context">
+          <small>SEDANG DIPUTAR DARI</small>
+          <strong id="npContext">Pustaka</strong>
+        </div>
+        <button class="icon-btn" data-act="np-menu" aria-label="Lainnya"><i data-icon="more"></i></button>
+      </header>
+      <div class="np-art-wrap"><div class="np-art" id="npArt"></div></div>
+      <div class="np-bottom">
+        <div class="np-meta">
+          <div class="np-text">
+            <div class="np-title" id="npTitle">—</div>
+            <div class="np-artist" id="npArtist">—</div>
+          </div>
+          <button class="icon-btn lg like-btn" id="npLike" data-act="like-current" aria-label="Suka"><i data-icon="heart"></i></button>
+        </div>
+        <div class="np-seek">
+          <input type="range" class="range" id="npSeek" min="0" max="1000" value="0" step="1" aria-label="Posisi lagu">
+          <div class="np-times"><span id="npCur">0:00</span><span id="npDur">0:00</span></div>
+        </div>
+        <div class="np-controls">
+          <button class="icon-btn lg toggle" id="npShuffle" data-act="shuffle" aria-label="Acak"><i data-icon="shuffle"></i></button>
+          <button class="icon-btn xl" data-act="prev" aria-label="Sebelumnya"><i data-icon="prev"></i></button>
+          <button class="play-btn xl" id="npPlay" data-act="toggle" aria-label="Putar"><i data-icon="play"></i></button>
+          <button class="icon-btn xl" data-act="next" aria-label="Berikutnya"><i data-icon="next"></i></button>
+          <button class="icon-btn lg toggle" id="npRepeat" data-act="repeat" aria-label="Ulangi"><i data-icon="repeat"></i></button>
+        </div>
+        <div class="np-extra">
+          <button class="icon-btn toggle" id="npSleep" data-act="sleep" aria-label="Timer tidur"><i data-icon="timer"></i><span class="sleep-label" id="npSleepLabel"></span></button>
+          <button class="icon-btn" data-act="queue" aria-label="Antrean"><i data-icon="queue"></i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="layer"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="import-status" id="importStatus" hidden></div>
+  <div class="drop-overlay" id="dropOverlay" hidden>
+    <div class="drop-card"><i data-icon="upload"></i><strong>Lepaskan untuk menambah lagu</strong><span>MP3, M4A, FLAC, WAV, OGG, OPUS</span></div>
+  </div>
+
+  <input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.oga,.opus,.webm,.weba,.aif,.aiff" multiple hidden>
+  <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
+  <input type="file" id="coverInput" accept="image/*" hidden>
+  <audio id="audio" preload="auto"></audio>
+
+  <noscript><p style="padding:24px;color:#fff">Aplikasi ini butuh JavaScript. Aktifkan JavaScript di browser kamu.</p></noscript>
+</body>
+</html>
