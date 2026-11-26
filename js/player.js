@@ -1,7 +1,10 @@
 // Mesin pemutar: antrean, acak, ulangi, timer tidur, kontrol layar kunci (Media Session).
+// Memakai dua "mesin": elemen <audio> untuk file di perangkat/link, dan YTEngine untuk YouTube.
 import { store } from './store.js';
+import { YT_ERRORS } from './ytengine.js';
 
 const SAVE_KEY = 'lagu-playback';
+const MEDIA_EVENTS = ['play', 'pause', 'playing', 'ended', 'error', 'timeupdate', 'durationchange', 'seeked', 'loadedmetadata'];
 
 function shuffleArray(arr) {
   const a = arr.slice();
@@ -13,9 +16,10 @@ function shuffleArray(arr) {
 }
 
 export class Player extends EventTarget {
-  constructor(audio) {
+  constructor(audio, yt) {
     super();
     this.audio = audio;
+    this.yt = yt;
     this.queue = [];
     this.original = null; // urutan asli sebelum diacak
     this.index = -1;
@@ -33,16 +37,27 @@ export class Player extends EventTarget {
 
     audio.volume = store.settings.volume ?? 0.8;
     audio.muted = !!store.settings.muted;
+    yt.volume = audio.volume;
+    yt.muted = audio.muted;
 
-    audio.addEventListener('play', () => this.onState());
-    audio.addEventListener('pause', () => { this.onState(); this.save(); });
-    audio.addEventListener('playing', () => { this.errorStreak = 0; this.onState(); });
-    audio.addEventListener('ended', () => this.onEnded());
-    audio.addEventListener('error', () => this.onError());
-    audio.addEventListener('timeupdate', () => this.onTime());
-    audio.addEventListener('durationchange', () => this.onDuration());
+    const handlers = {
+      play: () => this.onState(),
+      pause: () => { this.onState(); this.save(); },
+      playing: () => { this.errorStreak = 0; this.onState(); },
+      ended: () => this.onEnded(),
+      error: (e) => this.onError(e),
+      timeupdate: () => this.onTime(),
+      durationchange: () => this.onDuration(),
+      seeked: () => { this.updatePosition(true); this.emit('time'); },
+      loadedmetadata: () => this.emit('time'),
+    };
+    for (const engine of [audio, yt]) {
+      MEDIA_EVENTS.forEach((type) => engine.addEventListener(type, (e) => {
+        if (engine !== this.media) return; // abaikan event dari mesin yang tidak aktif
+        handlers[type](e);
+      }));
+    }
     audio.addEventListener('volumechange', () => this.emit('volume'));
-    audio.addEventListener('seeked', () => this.updatePosition(true));
 
     store.subscribe((type, detail) => {
       if (type === 'songs-deleted') this.onSongsDeleted(detail);
@@ -58,18 +73,28 @@ export class Player extends EventTarget {
 
   get current() { return this.index >= 0 ? store.get(this.queue[this.index]) || null : null; }
   get currentId() { return this.index >= 0 ? this.queue[this.index] : null; }
-  get isPlaying() { return !this.audio.paused && !this.audio.ended; }
-  get time() { return this.audio.currentTime || 0; }
+  get isYouTube() { return this.current?.source === 'youtube'; }
+  /** Mesin yang sedang dipakai lagu sekarang. */
+  get media() { return this.isYouTube ? this.yt : this.audio; }
+  get isPlaying() { return !this.media.paused && !this.media.ended; }
+  get time() { return this.media.currentTime || (this.isLoaded ? 0 : this.lastPos) || 0; }
   get duration() {
-    const d = this.audio.duration;
+    const d = this.media.duration;
     if (Number.isFinite(d) && d > 0) return d;
     return this.current?.duration || 0;
+  }
+  /** Apakah lagu sekarang sudah dimuat ke mesinnya. */
+  get isLoaded() {
+    const s = this.current;
+    if (!s) return false;
+    return s.source === 'youtube' ? this.yt.active && this.yt.videoId === s.ytId : !!this.audio.getAttribute('src');
   }
 
   // ---------- Memutar ----------
   async playList(ids, start = 0, context = null, opts = {}) {
     ids = ids.filter((id) => store.get(id));
     if (!ids.length) return;
+    this.errorStreak = 0;
     if (opts.shuffle !== undefined && opts.shuffle !== this.shuffle) {
       this.shuffle = opts.shuffle;
       store.saveSettings({ shuffle: this.shuffle });
@@ -97,6 +122,39 @@ export class Player extends EventTarget {
     const song = this.current;
     if (!song) { this.stop(); return; }
     this.counted = false;
+    this.lastPos = startAt || 0;
+
+    if (song.source === 'youtube') {
+      // Hentikan audio biasa, pakai player YouTube
+      this.audio.pause();
+      this.audio.removeAttribute('src');
+      try { this.audio.load(); } catch { /* abaikan */ }
+      if (this.objectUrl) { URL.revokeObjectURL(this.objectUrl); this.objectUrl = null; }
+      this.emit('track');
+      this.updateMediaSession();
+      if (autoplay) {
+        this.emit('yt-loading');
+        try {
+          await this.yt.load(song.ytId, true, startAt);
+        } catch {
+          if (token === this.token) {
+            this.yt.stop();
+            this.emit('track');
+            this.fail('Lagu YouTube butuh koneksi internet.');
+          }
+          return;
+        }
+      } else {
+        this.yt.stop(); // disiapkan saja; dimuat saat tombol putar ditekan
+      }
+      if (token !== this.token) return;
+      this.onState();
+      this.emit('track');
+      this.save(true);
+      return;
+    }
+
+    this.yt.stop();
     let src;
     let objectUrl = null;
     if (song.source === 'url') {
@@ -129,7 +187,7 @@ export class Player extends EventTarget {
 
   async safePlay() {
     try {
-      await this.audio.play();
+      await this.media.play();
     } catch (err) {
       if (err && err.name === 'NotAllowedError') this.emit('error', 'Ketuk tombol putar untuk mulai memutar.');
       else if (err && err.name !== 'AbortError') console.warn(err);
@@ -143,15 +201,16 @@ export class Player extends EventTarget {
       if (all.length) this.playList(all, this.shuffle ? -1 : 0, { type: 'library', id: null, label: 'Semua lagu' });
       return;
     }
-    if (!this.audio.getAttribute('src')) { this.load(true, this.lastPos); return; }
+    if (!this.isLoaded) { this.load(true, this.lastPos); return; }
     this.safePlay();
   }
 
-  pause() { this.audio.pause(); }
+  pause() { this.media.pause(); }
   toggle() { if (this.isPlaying) this.pause(); else this.play(); }
 
   next(auto = false) {
     if (!this.queue.length) return;
+    if (!auto) this.errorStreak = 0;
     if (this.index < this.queue.length - 1) {
       this.index++;
       this.load(true);
@@ -171,9 +230,14 @@ export class Player extends EventTarget {
 
   prev() {
     if (!this.queue.length) return;
-    if (this.audio.currentTime > 3 || (this.index === 0 && this.repeat !== 'all')) {
-      this.audio.currentTime = 0;
-      if (!this.isPlaying) this.safePlay();
+    this.errorStreak = 0;
+    if (this.media.currentTime > 3 || (this.index === 0 && this.repeat !== 'all')) {
+      if (this.isLoaded) {
+        this.media.currentTime = 0;
+        if (!this.isPlaying) this.safePlay();
+      } else {
+        this.load(true);
+      }
       return;
     }
     this.index = this.index > 0 ? this.index - 1 : this.queue.length - 1;
@@ -182,21 +246,26 @@ export class Player extends EventTarget {
 
   seek(t) {
     const d = this.duration;
-    if (!d) return;
-    try { this.audio.currentTime = Math.max(0, Math.min(d - 0.05, t)); } catch { /* abaikan */ }
+    if (!d || !this.isLoaded) { this.lastPos = Math.max(0, t); this.emit('time'); return; }
+    try { this.media.currentTime = Math.max(0, Math.min(d - 0.05, t)); } catch { /* abaikan */ }
+    this.emit('time');
   }
-  seekBy(delta) { this.seek(this.audio.currentTime + delta); }
+  seekBy(delta) { this.seek(this.time + delta); }
 
   setVolume(v) {
     v = Math.max(0, Math.min(1, v));
     this.audio.volume = v;
     if (v > 0 && this.audio.muted) this.audio.muted = false;
+    this.yt.volume = v;
+    this.yt.muted = this.audio.muted;
     store.saveSettings({ volume: v, muted: this.audio.muted });
   }
 
   toggleMute() {
     this.audio.muted = !this.audio.muted;
     if (!this.audio.muted && this.audio.volume === 0) this.audio.volume = 0.5;
+    this.yt.muted = this.audio.muted;
+    this.yt.volume = this.audio.volume;
     store.saveSettings({ muted: this.audio.muted, volume: this.audio.volume });
   }
 
@@ -212,7 +281,7 @@ export class Player extends EventTarget {
         this.index = cur ? 0 : -1;
       } else if (this.original) {
         const extra = this.queue.filter((id) => !this.original.includes(id));
-        let q = this.original.filter((id) => store.get(id));
+        const q = this.original.filter((id) => store.get(id));
         let idx = cur ? q.indexOf(cur) : -1;
         if (extra.length) q.splice(idx + 1, 0, ...extra.filter((id) => id !== cur));
         if (idx < 0 && cur) { q.unshift(cur); idx = 0; }
@@ -255,6 +324,7 @@ export class Player extends EventTarget {
 
   jumpTo(i) {
     if (i < 0 || i >= this.queue.length) return;
+    this.errorStreak = 0;
     this.index = i;
     this.load(true);
   }
@@ -301,6 +371,7 @@ export class Player extends EventTarget {
     this.audio.pause();
     this.audio.removeAttribute('src');
     try { this.audio.load(); } catch { /* abaikan */ }
+    this.yt.stop();
     if (this.objectUrl) { URL.revokeObjectURL(this.objectUrl); this.objectUrl = null; }
     this.queue = [];
     this.original = null;
@@ -312,13 +383,23 @@ export class Player extends EventTarget {
     this.save(true);
   }
 
+  /** Hentikan video YouTube (mis. pengguna menutup jendela video). */
+  stopYouTube() {
+    if (!this.isYouTube) return;
+    this.lastPos = this.yt.currentTime || this.lastPos;
+    this.token++;
+    this.yt.stop();
+    this.onState();
+    this.emit('track');
+    this.save(true);
+  }
+
   onSongsDeleted(ids) {
     if (!this.queue.length) return;
     const gone = new Set(ids);
     const cur = this.currentId;
     const curGone = cur && gone.has(cur);
     const wasPlaying = this.isPlaying;
-    // posisi lagu sekarang setelah lagu-lagu sebelumnya dihapus
     let newIndex = 0;
     for (let i = 0; i < this.index; i++) if (!gone.has(this.queue[i])) newIndex++;
     this.queue = this.queue.filter((id) => !gone.has(id));
@@ -334,7 +415,7 @@ export class Player extends EventTarget {
     this.save(true);
   }
 
-  // ---------- Event audio ----------
+  // ---------- Event mesin ----------
   onState() {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = this.current ? (this.isPlaying ? 'playing' : 'paused') : 'none';
@@ -343,47 +424,55 @@ export class Player extends EventTarget {
   }
 
   onTime() {
-    const t = this.audio.currentTime;
+    const t = this.media.currentTime;
     const d = this.duration;
     if (!this.counted && this.current && t >= Math.min(10, d ? d / 2 : 10)) {
       this.counted = true;
       store.recordPlay(this.current.id);
     }
-    this.lastPos = t;
+    if (t) this.lastPos = t;
     if (Date.now() - this.lastSave > 5000) this.save();
     this.updatePosition();
+    this.emit('time');
   }
 
   onDuration() {
     const s = this.current;
-    const d = this.audio.duration;
+    const d = this.media.duration;
     if (s && Number.isFinite(d) && d > 0 && Math.abs((s.duration || 0) - d) > 1.5) {
       store.updateSong(s.id, { duration: d });
     }
     this.updatePosition(true);
+    this.emit('time');
   }
 
   onEnded() {
     if (this.sleep && this.sleep.mode === 'track') {
       this.clearSleep();
-      this.audio.currentTime = 0;
+      this.media.currentTime = 0;
+      this.media.pause();
       this.onState();
       return;
     }
     if (this.repeat === 'one') {
-      this.audio.currentTime = 0;
+      this.media.currentTime = 0;
       this.safePlay();
       return;
     }
     this.next(true);
   }
 
-  onError() {
-    if (!this.audio.getAttribute('src')) return;
+  onError(e) {
     const s = this.current;
-    const msg = s && s.source === 'url'
+    if (!s) return;
+    if (e && e.target === this.yt) {
+      this.fail(`"${s.title}": ${YT_ERRORS[this.yt.errorCode] || 'Video YouTube tidak bisa diputar.'}`);
+      return;
+    }
+    if (!this.audio.getAttribute('src')) return;
+    const msg = s.source === 'url'
       ? `Tidak bisa memutar "${s.title}" (link tidak bisa diakses).`
-      : `Tidak bisa memutar "${s ? s.title : 'lagu'}". Format mungkin tidak didukung.`;
+      : `Tidak bisa memutar "${s.title}". Format mungkin tidak didukung.`;
     this.fail(msg);
   }
 
@@ -391,7 +480,7 @@ export class Player extends EventTarget {
     this.emit('error', msg);
     this.errorStreak++;
     if (this.errorStreak < Math.min(5, this.queue.length) && this.queue.length > 1) {
-      setTimeout(() => this.next(true), 400);
+      setTimeout(() => this.next(true), 600);
     } else {
       this.onState();
     }
@@ -412,7 +501,9 @@ export class Player extends EventTarget {
   clearSleep(emit = true) {
     if (this.sleep && this.sleep.timer) clearInterval(this.sleep.timer);
     if (this.fading) {
-      this.audio.volume = store.settings.volume ?? 0.8;
+      const v = store.settings.volume ?? 0.8;
+      this.audio.volume = v;
+      this.yt.volume = v;
       this.fading = false;
     }
     this.sleep = null;
@@ -430,13 +521,13 @@ export class Player extends EventTarget {
     const left = this.sleep.end - Date.now();
     const base = store.settings.volume ?? 0.8;
     if (left <= 0) {
-      this.audio.pause();
+      this.media.pause();
       this.clearSleep();
       return;
     }
     if (left < 10000 && this.isPlaying) {
       this.fading = true;
-      this.audio.volume = Math.max(0, base * (left / 10000));
+      this.media.volume = Math.max(0, base * (left / 10000));
     }
     this.emit('sleep');
   }
@@ -454,7 +545,7 @@ export class Player extends EventTarget {
     set('seekbackward', (d) => this.seekBy(-(d.seekOffset || 10)));
     set('seekforward', (d) => this.seekBy(d.seekOffset || 10));
     set('seekto', (d) => {
-      if (d.fastSeek && 'fastSeek' in this.audio) this.audio.fastSeek(d.seekTime);
+      if (d.fastSeek && 'fastSeek' in this.media) this.media.fastSeek(d.seekTime);
       else this.seek(d.seekTime);
     });
   }
@@ -465,7 +556,7 @@ export class Player extends EventTarget {
     if (!s) { navigator.mediaSession.metadata = null; return; }
     const artwork = [];
     const url = await store.coverUrl(s.id);
-    if (s !== this.current && this.current?.id !== s.id) return;
+    if (this.current?.id !== s.id) return;
     if (url) artwork.push({ src: url, sizes: '600x600', type: 'image/jpeg' });
     artwork.push({ src: new URL('icons/icon-512.png', location.href).href, sizes: '512x512', type: 'image/png' });
     try {
@@ -483,13 +574,13 @@ export class Player extends EventTarget {
     const now = Date.now();
     if (!force && now - (this.lastPosUpdate || 0) < 1000) return;
     this.lastPosUpdate = now;
-    const d = this.audio.duration;
+    const d = this.media.duration;
     if (!Number.isFinite(d) || d <= 0) return;
     try {
       navigator.mediaSession.setPositionState({
         duration: d,
-        playbackRate: this.audio.playbackRate || 1,
-        position: Math.min(d, Math.max(0, this.audio.currentTime)),
+        playbackRate: this.media.playbackRate || 1,
+        position: Math.min(d, Math.max(0, this.media.currentTime)),
       });
     } catch { /* abaikan */ }
   }
@@ -504,7 +595,7 @@ export class Player extends EventTarget {
         original: this.original,
         index: this.index,
         context: this.context,
-        time: this.audio.currentTime || this.lastPos || 0,
+        time: (this.isLoaded && this.media.currentTime) || this.lastPos || 0,
       }));
     } catch { /* abaikan */ }
   }
@@ -524,8 +615,7 @@ export class Player extends EventTarget {
       this.index = 0;
       data.time = 0;
     }
-    this.lastPos = data.time || 0;
     this.emit('queue');
-    this.load(false, this.lastPos);
+    this.load(false, data.time || 0);
   }
 }

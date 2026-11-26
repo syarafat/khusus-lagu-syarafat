@@ -43,9 +43,11 @@ export function initPlayerUI(p) {
   player.addEventListener('queue', () => { renderQueue(); renderContext(); });
   player.addEventListener('sleep', renderSleep);
   player.addEventListener('error', (e) => toast(e.detail, { kind: 'warn' }));
-  player.audio.addEventListener('timeupdate', () => { if (!player.isPlaying) renderTime(); });
-  player.audio.addEventListener('loadedmetadata', renderTime);
+  player.addEventListener('time', () => { if (!player.isPlaying) renderTime(); });
+  player.addEventListener('yt-loading', layoutDock);
   player.audio.addEventListener('emptied', renderTime);
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(layoutDock, 120); });
 
   // Geser ke bawah untuk menutup layar "Sedang diputar" (HP)
   const np = $('#np');
@@ -106,6 +108,7 @@ function renderTrack() {
   });
   document.title = s && player.isPlaying ? `${s.title} · ${s.artist}` : 'Lagu Syarafat';
   renderContext();
+  layoutDock();
   markPlaying();
   renderTime();
   renderQueue();
@@ -130,6 +133,33 @@ function renderState() {
   updateContextButtons();
   if (playing) startLoop(); else stopLoop();
   renderTime();
+  layoutDock();
+}
+
+// ---------- Jendela video YouTube ----------
+let dockTimer = 0;
+export function layoutDock() {
+  const dock = $('#ytDock');
+  const show = !!(player && player.isYouTube && player.yt.wanted);
+  document.body.classList.toggle('yt-on', show);
+  dock.hidden = !show;
+  if (!show) return;
+  const inNP = !!npEntry;
+  dock.classList.toggle('in-np', inNP);
+  if (!inNP) {
+    dock.classList.remove('fading');
+    dock.style.left = dock.style.top = dock.style.width = dock.style.height = '';
+    return;
+  }
+  const r = $('#npArt').getBoundingClientRect();
+  if (!r.width) return;
+  // Video 16:9 di area sampul, minimal 356 px lebar (tinggi ≥ 200 px sesuai aturan YouTube)
+  const w = Math.min(window.innerWidth, Math.max(r.width, 356));
+  const h = (w * 9) / 16;
+  dock.style.left = `${Math.round(r.left + r.width / 2 - w / 2)}px`;
+  dock.style.top = `${Math.round(r.top + r.height / 2 - h / 2)}px`;
+  dock.style.width = `${Math.round(w)}px`;
+  dock.style.height = `${Math.round(h)}px`;
 }
 
 function renderModes() {
@@ -222,8 +252,14 @@ export function openNowPlaying() {
     np.classList.remove('in');
     document.body.classList.remove('np-open');
     npEntry = null;
+    clearTimeout(dockTimer);
+    layoutDock();
     setTimeout(() => { if (!npEntry) np.hidden = true; }, 260);
   });
+  // Pindahkan video ke area sampul setelah animasi layar selesai
+  $('#ytDock').classList.add('fading');
+  clearTimeout(dockTimer);
+  dockTimer = setTimeout(() => { layoutDock(); $('#ytDock').classList.remove('fading'); }, 330);
   renderTime();
   renderSleep();
 }

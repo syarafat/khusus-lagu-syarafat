@@ -719,6 +719,30 @@ body.np-open .toasts { top: calc(64px + env(safe-area-inset-top)); bottom: auto 
 .drop-card strong { font-size: 22px; }
 .drop-card span { color: rgba(255, 255, 255, 0.8); }
 
+/* ===== Jendela video YouTube ===== */
+.yt-dock {
+  position: fixed; z-index: 45; right: 16px; bottom: calc(var(--player-h) + 16px); width: 384px;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 10px; background: #000; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  transition: opacity 0.2s;
+}
+.yt-frame { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.yt-frame > iframe, .yt-frame > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.yt-bar { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 12px; background: #18181f; color: var(--muted); font-size: 12px; }
+.yt-bar > .ic { width: 14px; height: 14px; color: #ff4e45; }
+.yt-bar span { flex: 1; }
+.yt-dock.in-np { z-index: 55; right: auto; bottom: auto; border-radius: 8px; }
+.yt-dock.in-np .yt-frame { aspect-ratio: auto; height: 100%; }
+.yt-dock.in-np .yt-bar { display: none; }
+.yt-dock.fading { opacity: 0; pointer-events: none; }
+body.yt-on .np-art .cv { visibility: hidden; }
+.badge.yt { background: #ff4e45; color: #fff; }
+textarea.input { height: auto; min-height: 76px; padding: 12px 14px; resize: vertical; line-height: 1.5; font-family: inherit; }
+.url-form { align-items: flex-start; }
+.yt-note { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 78, 69, 0.08); border: 1px solid rgba(255, 78, 69, 0.25); color: var(--muted); font-size: 13px; line-height: 1.6; }
+.yt-note b { color: var(--text); }
+.yt-note ul { margin: 6px 0 0; padding-left: 18px; }
+
 /* ===== Responsif: lebar area konten ===== */
 @container main (max-width: 900px) {
   .row { grid-template-columns: 36px minmax(0, 5fr) minmax(0, 3fr) 34px 50px 34px; }
@@ -812,6 +836,7 @@ body.np-open .toasts { top: calc(64px + env(safe-area-inset-top)); bottom: auto 
   .edit-cover { display: flex; align-items: center; gap: 16px; }
   .edit-cover .cv { width: 110px; height: 110px; }
   .np-controls .icon-btn.xl { width: 52px; height: 52px; }
+  .yt-dock:not(.in-np) { left: 8px; right: 8px; width: auto; bottom: calc(var(--nav-h) + 70px + env(safe-area-inset-bottom)); }
 }
 @media (min-width: 761px) { .mobile-only { display: none !important; } }
 @media (max-width: 760px) { .desktop-only { display: none !important; } }

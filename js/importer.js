@@ -1,6 +1,7 @@
 // Proses menambah lagu: baca tag, durasi, sampul, lalu simpan.
 import { store, uid } from './store.js';
-import { readTags, guessFromFilename, cleanTitle } from './metadata.js';
+import { readTags, guessFromFilename, cleanTitle, parseVideoTitle } from './metadata.js';
+import { parseYouTubeId, isYouTubeUrl } from './ytengine.js';
 
 export const AUDIO_EXT = ['mp3', 'm4a', 'aac', 'mp4', 'flac', 'wav', 'ogg', 'oga', 'opus', 'webm', 'weba', 'aif', 'aiff', 'caf', '3gp', 'amr', 'm4b'];
 
@@ -87,15 +88,23 @@ async function loadBitmap(blob) {
   });
 }
 
-/** Kecilkan sampul jadi maks 600px & ambil warna dominan untuk latar. */
-export async function processCover(blob) {
+/**
+ * Kecilkan sampul jadi maks 600px & ambil warna dominan untuk latar.
+ * crop (opsional, dalam pecahan 0..1): bagian gambar yang dipakai, mis. untuk
+ * membuang garis hitam pada thumbnail YouTube.
+ */
+export async function processCover(blob, crop = null) {
   const img = await loadBitmap(blob);
-  const w = img.width || img.naturalWidth;
-  const h = img.height || img.naturalHeight;
-  if (!w || !h) throw new Error('gambar kosong');
+  const iw = img.width || img.naturalWidth;
+  const ih = img.height || img.naturalHeight;
+  if (!iw || !ih) throw new Error('gambar kosong');
+  const cx = crop ? crop.x * iw : 0;
+  const cy = crop ? crop.y * ih : 0;
+  const w = crop ? crop.w * iw : iw;
+  const h = crop ? crop.h * ih : ih;
   const side = Math.min(w, h);
-  const sx = (w - side) / 2;
-  const sy = (h - side) / 2;
+  const sx = cx + (w - side) / 2;
+  const sy = cy + (h - side) / 2;
   const size = Math.min(600, side);
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -311,4 +320,116 @@ export async function importFromUrl(rawUrl) {
   };
   await store.addSong(song, null, null);
   return { mode: 'stream', song };
+}
+
+
+// ---------- YouTube / YouTube Music ----------
+async function fetchYouTubeMeta(id) {
+  const watch = `https://www.youtube.com/watch?v=${id}`;
+  let res;
+  try {
+    res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watch)}&format=json`);
+  } catch {
+    // coba layanan cadangan
+    try {
+      const r2 = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(watch)}`);
+      const j = await r2.json();
+      if (j && j.title) return j;
+    } catch { /* abaikan */ }
+    throw new Error('Butuh koneksi internet untuk menambah lagu dari YouTube.');
+  }
+  if (res.status === 401 || res.status === 403) throw new Error('Pemilik video ini tidak mengizinkan diputar di aplikasi lain. Coba video lain (misalnya versi "Topic" atau lirik).');
+  if (res.status === 404 || res.status === 400) throw new Error('Video tidak ditemukan atau dijadikan privat.');
+  if (!res.ok) throw new Error('YouTube sedang tidak bisa dihubungi. Coba lagi nanti.');
+  return res.json();
+}
+
+async function fetchYouTubeCover(id) {
+  // maxresdefault (16:9, tanpa garis hitam) bila ada; jika tidak, hqdefault (4:3 dengan garis hitam)
+  const tries = [
+    { url: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, crop: null },
+    { url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, crop: { x: 0, y: 0.125, w: 1, h: 0.75 } },
+  ];
+  for (const t of tries) {
+    try {
+      const r = await fetch(t.url, { mode: 'cors' });
+      if (!r.ok) continue;
+      const blob = await r.blob();
+      if (blob.size < 2000) continue;
+      return await processCover(blob, t.crop);
+    } catch { /* coba berikutnya */ }
+  }
+  return null;
+}
+
+/** Tambah satu lagu dari link YouTube / YouTube Music. */
+export async function importYouTube(raw) {
+  const id = parseYouTubeId(raw);
+  if (!id) {
+    if (/[?&]list=/.test(raw)) throw new Error('Link playlist YouTube belum didukung. Tempel link lagunya satu per satu.');
+    throw new Error('Link YouTube tidak dikenali.');
+  }
+  const dup = store.findYouTube(id);
+  if (dup) return { dup: true, song: dup };
+  const meta = await fetchYouTubeMeta(id);
+  const { artist, title } = parseVideoTitle(meta.title, meta.author_name);
+  const cover = await fetchYouTubeCover(id);
+  const song = {
+    id: uid(),
+    title,
+    artist,
+    album: '',
+    albumArtist: '',
+    year: '',
+    track: 0,
+    duration: 0, // diketahui saat pertama kali diputar
+    size: 0,
+    type: 'video/youtube',
+    fileName: meta.title || '',
+    source: 'youtube',
+    ytId: id,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    hasCover: !!cover,
+    remoteCover: cover ? null : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+    color: cover ? cover.color : placeholderColor(artist + title),
+    liked: false,
+    likedAt: 0,
+    addedAt: Date.now(),
+    playCount: 0,
+    lastPlayed: 0,
+  };
+  if (!cover) song.hasCover = true; // pakai gambar langsung dari YouTube
+  await store.addSong(song, null, cover ? cover.blob : null);
+  return { dup: false, song };
+}
+
+/**
+ * Tambah banyak link sekaligus (YouTube, YouTube Music, atau link file audio).
+ * onProgress(done, total) dipanggil setiap selesai satu link.
+ */
+export async function importLinks(text, onProgress = () => {}) {
+  const links = [...new Set(String(text || '').match(/https?:\/\/[^\s<>"']+/g) || [])];
+  const result = { added: [], dup: 0, failed: [] };
+  if (!links.length) {
+    const t = String(text || '').trim();
+    if (t) result.failed.push({ link: t, reason: 'Bukan link yang valid (harus diawali https://).' });
+    return result;
+  }
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i].replace(/[),.]+$/, '');
+    try {
+      if (isYouTubeUrl(link)) {
+        const r = await importYouTube(link);
+        if (r.dup) result.dup++; else result.added.push(r.song);
+      } else {
+        const r = await importFromUrl(link);
+        if (r.mode === 'download' && !r.summary.added.length) result.dup++;
+        else result.added.push(r.song || store.get(r.summary.added[0]));
+      }
+    } catch (err) {
+      result.failed.push({ link, reason: err.message || 'Gagal' });
+    }
+    onProgress(i + 1, links.length);
+  }
+  return result;
 }

@@ -97,7 +97,7 @@ export const store = {
     if (blob) await db.put('covers', blob, id);
     else await db.del('covers', id);
     dropCover(id);
-    await this.updateSong(id, { hasCover: !!blob, ...(color ? { color } : {}) });
+    await this.updateSong(id, { hasCover: !!blob, remoteCover: null, ...(color ? { color } : {}) });
   },
 
   async toggleLike(id) {
@@ -148,6 +148,7 @@ export const store = {
   coverUrl(id) {
     const s = this.songs.get(id);
     if (!s || !s.hasCover) return Promise.resolve(null);
+    if (s.remoteCover) return Promise.resolve(s.remoteCover);
     if (!coverCache.has(id)) {
       coverCache.set(id, db.get('covers', id).then((b) => {
         if (!b) return null;
@@ -161,7 +162,14 @@ export const store = {
 
   /** URL sampul bila sudah pernah dimuat (agar tidak berkedip saat render ulang). */
   coverUrlSync(id) {
+    const s = this.songs.get(id);
+    if (s && s.hasCover && s.remoteCover) return s.remoteCover;
     return coverReady.get(id) || null;
+  },
+
+  findYouTube(ytId) {
+    for (const s of this.songs.values()) if (s.source === 'youtube' && s.ytId === ytId) return s;
+    return null;
   },
 
   // ---------- Playlist ----------

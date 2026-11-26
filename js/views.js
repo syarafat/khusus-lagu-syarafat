@@ -59,11 +59,11 @@ function row(s, i, opts) {
   return `
   <div class="row${cur ? ' playing' : ''}${sel ? ' sel' : ''}" data-id="${esc(s.id)}" data-i="${i}" data-act="row" tabindex="0">
     <div class="c-num"><span class="n">${opts.numbers === 'track' && s.track ? s.track : i + 1}</span><span class="eq"><i></i><i></i><i></i></span><span class="pi">${icon('play')}</span><span class="chk">${icon('check')}</span></div>
-    <div class="c-main">${coverHTML(s, 'sm')}<div class="c-text"><div class="t">${esc(s.title)}</div><div class="a">${s.liked ? `<span class="liked-dot">${icon('heartFill')}</span>` : ''}${s.source === 'url' ? `<span class="badge">LINK</span>` : ''}${esc(s.artist)}</div></div></div>
+    <div class="c-main">${coverHTML(s, 'sm')}<div class="c-text"><div class="t">${esc(s.title)}</div><div class="a">${s.liked ? `<span class="liked-dot">${icon('heartFill')}</span>` : ''}${s.source === 'url' ? `<span class="badge">LINK</span>` : s.source === 'youtube' ? `<span class="badge yt">YT</span>` : ''}${esc(s.artist)}</div></div></div>
     <div class="c-album">${s.album ? `<a href="${albumHash(s.album, s.albumArtist || s.artist)}" class="sublink" data-stop>${esc(s.album)}</a>` : '<span class="muted">—</span>'}</div>
     <div class="c-added">${esc(fmtDate(s.addedAt))}</div>
     <button class="icon-btn sm c-like${s.liked ? ' on' : ''}" data-act="like" data-id="${esc(s.id)}" aria-label="Suka">${icon(s.liked ? 'heartFill' : 'heart')}</button>
-    <div class="c-dur">${fmtTime(s.duration)}</div>
+    <div class="c-dur">${s.duration ? fmtTime(s.duration) : '—'}</div>
     <button class="icon-btn sm c-more" data-act="song-menu" data-id="${esc(s.id)}" aria-label="Lainnya">${icon('more')}</button>
   </div>`;
 }
@@ -446,13 +446,23 @@ export function addView() {
       </div>
       <div id="importBox"></div>
 
-      <section class="panel">
-        <h2>${icon('link')} Tambah dari link</h2>
-        <p class="muted">Tempel link <b>langsung ke file audio</b> (biasanya berakhiran <code>.mp3</code>). Jika server mengizinkan, lagu diunduh agar bisa diputar offline. Jika tidak, lagu disimpan sebagai <b>streaming</b> (butuh internet saat diputar).</p>
+      <section class="panel" id="linkPanel">
+        <h2>${icon('link')} Tambah dari link YouTube / YouTube Music</h2>
+        <p class="muted">Tempel link lagu dari <b>YouTube</b> atau <b>YouTube Music</b> (bisa beberapa link sekaligus, satu per baris). Link langsung ke file audio (mis. berakhiran <code>.mp3</code>) juga bisa.</p>
         <form class="url-form" id="urlForm">
-          <input type="url" class="input" id="urlInput" placeholder="https://contoh.com/lagu.mp3" required inputmode="url" autocomplete="off">
+          <textarea class="input" id="urlInput" rows="3" placeholder="https://youtu.be/…&#10;https://music.youtube.com/watch?v=…" required autocomplete="off" spellcheck="false"></textarea>
           <button class="btn primary" type="submit">Tambah</button>
         </form>
+        <div class="yt-note">
+          <b>Cara kerja lagu dari YouTube:</b> lagu diputar lewat <b>player resmi YouTube</b> di dalam aplikasi (tidak diunduh), jadi:
+          <ul>
+            <li>butuh <b>internet</b> dan videonya tampil di layar;</li>
+            <li>YouTube bisa saja menampilkan <b>iklan</b> di videonya;</li>
+            <li>berhenti saat layar HP dikunci atau aplikasi ditutup (aturan YouTube);</li>
+            <li>beberapa video tidak bisa diputar di luar YouTube karena dibatasi pemiliknya — coba versi "Topic", "Lyrics", atau audio.</li>
+          </ul>
+          Untuk lagu yang benar-benar <b>tanpa iklan &amp; bisa offline</b>, pakai file lagu milikmu (tombol "Pilih file lagu" di atas).
+        </div>
       </section>
 
       <section class="panel">
@@ -467,7 +477,7 @@ export function addView() {
           <li><b>Di HP Android:</b> lagu biasanya ada di folder <i>Download</i>, <i>Music</i>, atau <i>WhatsApp/Media/WhatsApp Audio</i>.</li>
           <li><b>Pindah dari laptop ke HP:</b> pakai kabel USB, Quick Share/Nearby Share, atau unggah ke Google Drive lalu unduh di HP.</li>
           <li><b>Di laptop:</b> seret banyak file atau satu folder sekaligus ke jendela aplikasi ini.</li>
-          <li><b>Bagikan ke aplikasi:</b> setelah aplikasi dipasang di Android, kamu bisa memilih file lagu di aplikasi File lalu <i>Bagikan → ${APP_NAME}</i>.</li>
+          <li><b>Bagikan ke aplikasi:</b> setelah aplikasi dipasang di Android, kamu bisa memilih file lagu di aplikasi File — atau menekan <i>Bagikan</i> di aplikasi YouTube / YouTube Music — lalu pilih <i>${APP_NAME}</i>.</li>
           <li>Judul, artis, album, dan sampul dibaca otomatis dari file. Bisa diubah lewat menu ${icon('more')} → <i>Edit info lagu</i>.</li>
         </ul>
       </section>`,

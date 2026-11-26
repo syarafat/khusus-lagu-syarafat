@@ -6,7 +6,8 @@ import { $, $$, esc, toast, isMobile, hydrateCovers, confirmDialog, openModal, o
 import * as A from './actions.js';
 import * as V from './views.js';
 import * as PUI from './playerui.js';
-import { importFiles, importFromUrl, onImportStatus } from './importer.js';
+import { importFiles, importLinks, onImportStatus } from './importer.js';
+import { YTEngine } from './ytengine.js';
 
 const view = $('#view');
 const main = $('#main');
@@ -103,23 +104,21 @@ function mountView() {
     if (s) s.addEventListener('change', () => { store.saveSettings({ librarySort: s.value }); renderView(true); });
   }
   if (route.name === 'add') {
-    $('#urlForm').addEventListener('submit', async (e) => {
+    const form = $('#urlForm');
+    const input = $('#urlInput');
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) form.requestSubmit();
+    });
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const input = $('#urlInput');
-      const btn = e.target.querySelector('button');
+      const btn = form.querySelector('button');
       btn.disabled = true;
       btn.textContent = 'Memeriksa…';
       try {
-        const res = await importFromUrl(input.value);
-        if (res.mode === 'download') {
-          if (res.summary.added.length) toast('Lagu diunduh dan disimpan di perangkat');
-          else toast('Lagu ini sudah ada di pustaka');
-        } else {
-          toast(`"${res.song.title}" ditambahkan sebagai streaming (butuh internet)`);
-        }
-        input.value = '';
-      } catch (err) {
-        toast(err.message || 'Gagal menambahkan link', { kind: 'warn', timeout: 6000 });
+        await runLinkImport(input.value, (done, total) => {
+          if (btn.isConnected && total > 1) btn.textContent = `${done}/${total}…`;
+        });
+        if (input.isConnected) input.value = '';
       } finally {
         if (btn.isConnected) { btn.disabled = false; btn.textContent = 'Tambah'; }
       }
@@ -193,6 +192,30 @@ async function runImport(files, opts = {}) {
     toast(msg);
   }
   if (n) requestPersist();
+}
+
+async function runLinkImport(text, onProgress) {
+  const r = await importLinks(text, onProgress);
+  const n = r.added.length;
+  const parts = [];
+  if (n === 1) parts.push(`"${r.added[0].title}" ditambahkan`);
+  else if (n) parts.push(`${n} lagu ditambahkan`);
+  if (r.dup) parts.push(`${r.dup} sudah ada`);
+  if (r.failed.length) {
+    if (!n && !r.dup && r.failed.length === 1) {
+      toast(r.failed[0].reason, { kind: 'warn', timeout: 7000 });
+      return r;
+    }
+    parts.push(`${r.failed.length} gagal`);
+    toast(parts.join(' · '), { kind: 'warn', action: { label: 'Detail', fn: () => showFailures(r.failed.map((f) => ({ name: f.link, reason: f.reason }))) } });
+    return r;
+  }
+  if (parts.length) {
+    const first = r.added[0];
+    toast(parts.join(' · '), n ? { action: { label: 'Putar', fn: () => player.playList(r.added.map((x) => x.id), 0, { type: 'queue', id: null, label: 'Baru ditambahkan' }) } } : {});
+    if (first) requestPersist();
+  }
+  return r;
 }
 
 function showFailures(list) {
@@ -346,6 +369,7 @@ async function handleAct(act, el, e) {
     case 'queue': PUI.toggleQueue(); break;
     case 'open-np': if (player.current) PUI.openNowPlaying(); break;
     case 'close-np': PUI.closeNowPlaying(); break;
+    case 'yt-close': player.stopYouTube(); break;
     case 'np-menu': PUI.nowPlayingMenu(el); break;
     case 'sleep': PUI.sleepMenu(el); break;
     case 'like-current': if (player.current) A.toggleLike(player.current.id); break;
@@ -605,9 +629,12 @@ function setupPWA() {
   const params = new URLSearchParams(location.search);
   if (params.has('shared')) {
     history.replaceState(null, '', location.pathname + (location.hash || '#/add'));
-    readShareInbox().then((files) => {
+    readShareInbox().then((items) => {
+      const files = items.filter((x) => x instanceof Blob);
+      const texts = items.filter((x) => typeof x === 'string');
       if (files.length) runImport(files);
-      else if (params.get('shared') === 'error') toast('File yang dibagikan tidak bisa dibaca', { kind: 'warn' });
+      if (texts.length) runLinkImport(texts.join('\n'));
+      if (!items.length && params.get('shared') === 'error') toast('Yang dibagikan tidak bisa dibaca', { kind: 'warn' });
     });
   }
 
@@ -650,7 +677,7 @@ async function boot() {
     view.innerHTML = `<div class="empty"><div class="empty-ic">${icon('alert')}</div><h3>Penyimpanan tidak tersedia</h3><p>${esc(err.message || 'Browser menolak penyimpanan lokal.')}<br>Coba buka di Chrome/Edge/Safari versi terbaru dan jangan gunakan mode penyamaran.</p></div>`;
     return;
   }
-  player = new Player($('#audio'));
+  player = new Player($('#audio'), new YTEngine('ytMount'));
   A.ctx.player = player;
   PUI.initPlayerUI(player);
   player.restore();

@@ -1,6 +1,6 @@
 // Service worker: membuat aplikasi bisa dibuka tanpa internet & menerima file yang dibagikan.
 // Naikkan VERSION setiap kali file aplikasi diubah agar pengguna mendapat versi baru.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `lagu-${VERSION}`;
 const ASSETS = [
   './',
@@ -18,6 +18,7 @@ const ASSETS = [
   'js/store.js',
   'js/ui.js',
   'js/views.js',
+  'js/ytengine.js',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -90,15 +91,19 @@ async function handleShare(request) {
   try {
     const form = await request.formData();
     const files = form.getAll('audio').filter((f) => f && typeof f !== 'string');
+    // Link yang dibagikan dari aplikasi YouTube / YouTube Music (atau browser)
+    const text = ['url', 'text', 'title'].map((k) => form.get(k)).filter((v) => typeof v === 'string' && v).join(' ');
+    const links = text.match(/https?:\/\/[^\s<>"']+/g) || [];
+    const items = [...files, ...links];
     const db = await openInbox();
     await new Promise((resolve, reject) => {
       const tx = db.transaction('files', 'readwrite');
-      files.forEach((f) => tx.objectStore('files').add(f));
+      items.forEach((f) => tx.objectStore('files').add(f));
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-    return back(files.length ? '1' : 'error');
+    return back(items.length ? '1' : 'error');
   } catch (err) {
     return back('error');
   }

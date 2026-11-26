@@ -108,7 +108,7 @@ export function addSongsToPlaylistDialog(pid) {
         <input type="checkbox" value="${esc(s.id)}" ${picked.has(s.id) ? 'checked' : ''}>
         ${coverHTML(s, 'sm')}
         <span class="pick-text"><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></span>
-        <span class="pick-dur">${fmtTime(s.duration)}</span>
+        <span class="pick-dur">${s.duration ? fmtTime(s.duration) : '—'}</span>
       </label>`).join('');
   };
   openModal({
@@ -177,7 +177,7 @@ export function editSong(id) {
           <label class="field"><span>Judul</span><input class="input" name="title" maxlength="200" value="${esc(s.title)}"></label>
           <label class="field"><span>Artis</span><input class="input" name="artist" maxlength="200" value="${esc(s.artist)}"></label>
           <label class="field"><span>Album</span><input class="input" name="album" maxlength="200" value="${esc(s.album)}"></label>
-          <p class="muted small">${esc(s.fileName || '')}${s.source === 'url' ? ' · streaming' : ''}</p>
+          <p class="muted small">${esc(s.fileName || '')}${s.source === 'url' ? ' · streaming' : s.source === 'youtube' ? ' · YouTube' : ''}</p>
         </div>
       </div>`,
     actions: [
@@ -230,8 +230,8 @@ export function songInfo(id) {
     title: 'Info lagu',
     body: `<div class="info-list">
       ${row('Judul', s.title)}${row('Artis', s.artist)}${row('Album', s.album)}${row('Tahun', s.year)}
-      ${row('Durasi', fmtTime(s.duration))}${row('Nama file', s.fileName)}${row('Ukuran', size)}
-      ${row('Sumber', s.source === 'url' ? 'Link (streaming)' : 'Tersimpan di perangkat')}${s.source === 'url' ? row('Link', s.url) : ''}
+      ${row('Durasi', s.duration ? fmtTime(s.duration) : '')}${row(s.source === 'youtube' ? 'Judul video' : 'Nama file', s.fileName)}${row('Ukuran', size)}
+      ${row('Sumber', s.source === 'youtube' ? 'YouTube (butuh internet)' : s.source === 'url' ? 'Link (streaming)' : 'Tersimpan di perangkat')}${s.source !== 'file' ? row('Link', s.url) : ''}
       ${row('Diputar', `${s.playCount || 0} kali`)}${row('Ditambahkan', new Date(s.addedAt).toLocaleString('id-ID'))}
     </div>`,
     actions: [{ label: 'Tutup', kind: 'primary' }],
@@ -255,6 +255,7 @@ export function songMenu(anchor, id, opts = {}) {
   items.push('-');
   items.push({ icon: 'user', label: 'Lihat artis', onClick: () => go(artistHash(s.artist)) });
   if (s.album) items.push({ icon: 'disc', label: 'Lihat album', onClick: () => go(albumHash(s.album, s.albumArtist || s.artist)) });
+  if (s.source === 'youtube') items.push({ icon: 'link', label: 'Buka di YouTube', onClick: () => window.open(s.url, '_blank', 'noopener') });
   items.push({ icon: 'edit', label: 'Edit info lagu', onClick: () => editSong(id) });
   items.push({ icon: 'info', label: 'Info lagu', onClick: () => songInfo(id) });
   items.push('-');

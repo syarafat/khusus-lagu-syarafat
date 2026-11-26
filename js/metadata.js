@@ -418,3 +418,19 @@ export function guessFromFilename(name) {
 export function cleanTitle(t) {
   return String(t || '').replace(JUNK, '').replace(/\s+/g, ' ').trim();
 }
+
+/** Pisahkan judul video YouTube menjadi artis & judul lagu. */
+export function parseVideoTitle(title, author) {
+  let t = cleanTitle(title || '');
+  t = t.replace(/\s*\|\s*[^|]*(official|lyric|lirik|video|audio)[^|]*$/i, '').trim();
+  const channel = String(author || '')
+    .replace(/\s*-\s*Topic$/i, '')
+    .replace(/\s*VEVO$/i, '')
+    .replace(/\s+(Official|Music)$/i, '')
+    .trim();
+  const parts = t.split(/\s+[-–—]\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() };
+  }
+  return { artist: channel || 'YouTube', title: t || 'Video YouTube' };
+}
