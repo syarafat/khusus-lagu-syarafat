@@ -605,6 +605,15 @@ export function settingsView() {
       </section>
 
       <section class="panel">
+        <h2>${icon('speaker')} Dengar berdua</h2>
+        <p class="muted">Dua earphone/speaker Bluetooth di satu HP, atau lagu yang sama di dua HP sekaligus.</p>
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn ghost" data-act="bt-help">${icon('speaker')} Beberapa perangkat Bluetooth</button>
+          <button class="btn ghost" data-act="together">${icon('users')} Dengar Bareng (2 HP)</button>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>${icon('shield')} Lagu dobel</h2>
         <p class="muted">Lagu yang sama otomatis dilewati saat ditambahkan. Untuk membersihkan lagu dobel yang mungkin sudah tersimpan sebelumnya, ketuk tombol di bawah. Status suka, jumlah putar, dan playlist tetap dipertahankan.</p>
         <button class="btn ghost" data-act="dedupe" ${n ? '' : 'disabled'}>${icon('search')} Cek lagu dobel</button>

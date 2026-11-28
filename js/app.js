@@ -9,7 +9,7 @@ import * as V from './views.js';
 import * as PUI from './playerui.js';
 import { importFiles, importLinks, onImportStatus, isMediaFile, sortEntries, fingerprint } from './importer.js';
 import { YTEngine } from './ytengine.js';
-import { initTogetherUI, openTogether } from './togetherui.js';
+import { initTogetherUI, openTogether, openBluetoothHelp } from './togetherui.js';
 
 const view = $('#view');
 const main = $('#main');
@@ -590,6 +590,7 @@ async function handleAct(act, el, e) {
     case 'sleep': PUI.sleepMenu(el); break;
     case 'like-current': if (player.current && store.get(player.current.id)) A.toggleLike(player.current.id); break;
     case 'together': openTogether(); break;
+    case 'bt-help': openBluetoothHelp(); break;
 
     // daftar lagu
     case 'like': A.toggleLike(id); break;

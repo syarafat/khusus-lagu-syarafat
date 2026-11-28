@@ -117,7 +117,20 @@ Cara kerja & catatan:
 - Lagu yang dikirim hanya disimpan sementara di memori HP teman — **tidak masuk** ke
   pustakanya. Jika HP teman sudah punya lagu yang sama, lagunya langsung dipakai tanpa dikirim.
 - Kode aktif selama aplikasi di HP pembuat sesi tetap terbuka.
+- **Tahan sinyal putus**: perintah (putar/jeda/posisi) dan kiriman lagu memakai jalur
+  terpisah, sehingga perintah tidak tertahan saat lagu sedang dikirim. Bila sambungan teman
+  putus atau macet, lagunya **tetap diputar** dan aplikasi **menyambung ulang otomatis**
+  (hingga 3 menit). Bila browser menahan pemutaran, muncul tombol *Ketuk untuk melanjutkan*.
+- Opsi *Layar tetap menyala selama sesi* membuat koneksi lebih stabil (lebih boros baterai).
 - Pakai earphone Bluetooth dan terasa tidak pas? Di HP teman: *Dengar Bareng → Atur jeda HP ini*.
+
+## Dua earphone/speaker Bluetooth di satu HP
+
+Aplikasi web tidak bisa memilih perangkat Bluetooth sendiri — suara mengikuti pilihan HP.
+Jika HP punya fitur **berbagi audio Bluetooth** (Xiaomi/POCO, OPPO, realme, vivo: *Berbagi
+audio*; Samsung: *Dual Audio*/*Auracast*): sambungkan kedua perangkat, putar lagu, buka
+kontrol musik di panel notifikasi → ikon keluaran audio → aktifkan perangkat kedua. Panduan
+ini juga ada di aplikasi (tombol 🔈 di layar *Sedang diputar*, atau *Pengaturan → Dengar berdua*).
 
 ## Dari mana dapat lagu?## Dengar Bareng (dua HP, lagu sama, bersamaan)
 
@@ -137,7 +150,20 @@ Cara kerja & catatan:
 - Lagu yang dikirim hanya disimpan sementara di memori HP teman — **tidak masuk** ke
   pustakanya. Jika HP teman sudah punya lagu yang sama, lagunya langsung dipakai tanpa dikirim.
 - Kode aktif selama aplikasi di HP pembuat sesi tetap terbuka.
+- **Tahan sinyal putus**: perintah (putar/jeda/posisi) dan kiriman lagu memakai jalur
+  terpisah, sehingga perintah tidak tertahan saat lagu sedang dikirim. Bila sambungan teman
+  putus atau macet, lagunya **tetap diputar** dan aplikasi **menyambung ulang otomatis**
+  (hingga 3 menit). Bila browser menahan pemutaran, muncul tombol *Ketuk untuk melanjutkan*.
+- Opsi *Layar tetap menyala selama sesi* membuat koneksi lebih stabil (lebih boros baterai).
 - Pakai earphone Bluetooth dan terasa tidak pas? Di HP teman: *Dengar Bareng → Atur jeda HP ini*.
+
+## Dua earphone/speaker Bluetooth di satu HP
+
+Aplikasi web tidak bisa memilih perangkat Bluetooth sendiri — suara mengikuti pilihan HP.
+Jika HP punya fitur **berbagi audio Bluetooth** (Xiaomi/POCO, OPPO, realme, vivo: *Berbagi
+audio*; Samsung: *Dual Audio*/*Auracast*): sambungkan kedua perangkat, putar lagu, buka
+kontrol musik di panel notifikasi → ikon keluaran audio → aktifkan perangkat kedua. Panduan
+ini juga ada di aplikasi (tombol 🔈 di layar *Sedang diputar*, atau *Pengaturan → Dengar berdua*).
 
 ## Dari mana dapat lagu?
 
