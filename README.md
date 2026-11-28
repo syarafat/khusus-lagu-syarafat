@@ -17,6 +17,12 @@ Aplikasi ini berupa *Progressive Web App* (PWA): dibuka lewat browser, lalu bisa
   jadi hemat memori. Semua diproses di perangkat, tanpa internet.
 - **Acak (shuffle)**: tombol *Acak semua lagu* di Beranda, tombol 🔀 di pemutar (juga di
   pemutar mini HP), dan tombol *Acak* di Pustaka, playlist, artis, dan album.
+- **Beberapa folder sekaligus**: ketuk *Pilih folder* berulang kali untuk mengumpulkan
+  beberapa folder; lagu di semua subfolder ikut dicari, diurutkan per folder & nama file
+  (1, 2, … 10), lalu ditambahkan sekaligus. Opsional: satu **playlist untuk tiap folder**.
+- **Anti dobel**: file yang sama dikenali dari isinya (walau namanya diganti atau ada di
+  folder lain) dan otomatis dilewati. Di *Pengaturan → Lagu dobel* ada tombol untuk
+  membersihkan lagu dobel lama (status suka, jumlah putar, dan playlist dipertahankan).
 - **Hapus lagu**: satu per satu (menu ⋯ → *Hapus lagu dari perangkat*) atau banyak
   sekaligus (tombol **Pilih** → centang → 🗑).
 - Judul, artis, album, dan **sampul dibaca otomatis** dari file (MP3, M4A, FLAC, OGG, OPUS, WAV).

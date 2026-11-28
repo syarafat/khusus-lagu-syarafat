@@ -32,15 +32,17 @@ export function albumsOf() {
   return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'id'));
 }
 
+const coll = new Intl.Collator('id', { numeric: true, sensitivity: 'base' });
 const sorters = {
   added: (a, b) => b.addedAt - a.addedAt,
-  title: (a, b) => a.title.localeCompare(b.title, 'id'),
-  artist: (a, b) => a.artist.localeCompare(b.artist, 'id') || a.title.localeCompare(b.title, 'id'),
+  title: (a, b) => coll.compare(a.title, b.title),
+  artist: (a, b) => coll.compare(a.artist, b.artist) || coll.compare(a.title, b.title),
+  folder: (a, b) => coll.compare(a.folder || '\uffff', b.folder || '\uffff') || coll.compare(a.fileName || a.title, b.fileName || b.title),
   album: (a, b) => (a.album || '￿').localeCompare(b.album || '￿', 'id') || (a.track || 0) - (b.track || 0),
   plays: (a, b) => (b.playCount || 0) - (a.playCount || 0) || b.lastPlayed - a.lastPlayed,
   duration: (a, b) => (b.duration || 0) - (a.duration || 0),
 };
-export const sortLabels = { added: 'Terbaru ditambahkan', title: 'Judul (A–Z)', artist: 'Artis (A–Z)', album: 'Album', plays: 'Paling sering diputar', duration: 'Durasi terpanjang' };
+export const sortLabels = { added: 'Terbaru ditambahkan', title: 'Judul (A–Z)', artist: 'Artis (A–Z)', folder: 'Folder', album: 'Album', plays: 'Paling sering diputar', duration: 'Durasi terpanjang' };
 
 function totalDuration(songs) { return songs.reduce((a, s) => a + (s.duration || 0), 0); }
 
@@ -60,7 +62,7 @@ function row(s, i, opts) {
   <div class="row${cur ? ' playing' : ''}${sel ? ' sel' : ''}" data-id="${esc(s.id)}" data-i="${i}" data-act="row" tabindex="0">
     <div class="c-num"><span class="n">${opts.numbers === 'track' && s.track ? s.track : i + 1}</span><span class="eq"><i></i><i></i><i></i></span><span class="pi">${icon('play')}</span><span class="chk">${icon('check')}</span></div>
     <div class="c-main">${coverHTML(s, 'sm')}<div class="c-text"><div class="t">${esc(s.title)}</div><div class="a">${s.liked ? `<span class="liked-dot">${icon('heartFill')}</span>` : ''}${s.source === 'url' ? `<span class="badge">LINK</span>` : s.source === 'youtube' ? `<span class="badge yt">YT</span>` : ''}${esc(s.artist)}</div></div></div>
-    <div class="c-album">${s.album ? `<a href="${albumHash(s.album, s.albumArtist || s.artist)}" class="sublink" data-stop>${esc(s.album)}</a>` : '<span class="muted">—</span>'}</div>
+    <div class="c-album">${opts.showFolder ? (s.folder ? `<span class="folder-tag">${icon('folder')}${esc(s.folder)}</span>` : '<span class="muted">—</span>') : s.album ? `<a href="${albumHash(s.album, s.albumArtist || s.artist)}" class="sublink" data-stop>${esc(s.album)}</a>` : '<span class="muted">—</span>'}</div>
     <div class="c-added">${esc(fmtDate(s.addedAt))}</div>
     <button class="icon-btn sm c-like${s.liked ? ' on' : ''}" data-act="like" data-id="${esc(s.id)}" aria-label="Suka">${icon(s.liked ? 'heartFill' : 'heart')}</button>
     <div class="c-dur">${s.duration ? fmtTime(s.duration) : '—'}</div>
@@ -76,7 +78,7 @@ export function tracklist(songs, key, context, opts = {}) {
   if (viewState.selecting && opts.selectable) cls.push('selecting');
   return `
   <div class="${cls.join(' ')}" data-list="${key}">
-    ${opts.header === false ? '' : `<div class="row head"><div class="c-num">#</div><div class="c-main">Judul</div><div class="c-album">Album</div><div class="c-added">Ditambahkan</div><div></div><div class="c-dur">${icon('clock')}</div><div></div></div>`}
+    ${opts.header === false ? '' : `<div class="row head"><div class="c-num">#</div><div class="c-main">Judul</div><div class="c-album">${opts.showFolder ? 'Folder' : 'Album'}</div><div class="c-added">Ditambahkan</div><div></div><div class="c-dur">${icon('clock')}</div><div></div></div>`}
     ${songs.map((s, i) => row(s, i, opts)).join('')}
   </div>`;
 }
@@ -308,7 +310,7 @@ export function libraryView() {
     const q = viewState.libFilter.trim().toLowerCase();
     const songs = all.filter((s) => !q || matchQ(s, q)).sort(sorters[sort] || sorters.added);
     const tl = songs.length
-      ? tracklist(songs, 'library', { type: 'library', id: null, label: 'Semua lagu' }, { selectable: true })
+      ? tracklist(songs, 'library', { type: 'library', id: null, label: 'Semua lagu' }, { selectable: true, showFolder: sort === 'folder' })
       : all.length
         ? emptyState({ ic: 'search', title: 'Tidak ada yang cocok', text: 'Coba kata kunci lain.' })
         : emptyState({ ic: 'note', title: 'Belum ada lagu', text: 'Tambahkan lagu dari perangkatmu untuk mulai mendengarkan.', actions: addButtons });
@@ -444,10 +446,11 @@ export function addView() {
         <span class="muted desktop-only">atau</span>
         <div class="btn-row center">
           <button class="btn primary" data-act="pick-files">${icon('note')} Pilih lagu / video</button>
-          <button class="btn ghost" data-act="pick-folder">${icon('folder')} Pilih satu folder</button>
+          <button class="btn ghost" data-act="pick-folder">${icon('folder')} Pilih folder</button>
         </div>
-        <small class="muted">Bisa pilih banyak sekaligus · Lagu: MP3, M4A, FLAC, WAV, OGG · Video: MP4, WEBM, MOV, MKV, 3GP</small>
+        <small class="muted">Bisa pilih banyak file, atau <b>beberapa folder</b> satu per satu — lagu di dalam subfolder ikut dicari. Lagu yang sudah ada otomatis dilewati.<br>Lagu: MP3, M4A, FLAC, WAV, OGG · Video: MP4, WEBM, MOV, MKV, 3GP</small>
       </div>
+      <div id="stagedFolders"></div>
       <div class="convert-note">
         <div class="cn-ic">${icon('wave')}</div>
         <div><b>Video otomatis diubah jadi MP3.</b> Foto sampulnya diambil dulu dari video (foto sampul bawaan file, atau cuplikan paling jelas), lalu hanya suaranya yang disimpan — videonya tidak, jadi hemat memori. Prosesnya berjalan di HP-mu sendiri tanpa internet; biarkan aplikasi tetap terbuka sampai selesai.</div>
@@ -474,7 +477,9 @@ export function addView() {
         <ul class="tips">
           <li><b>Di HP Android:</b> lagu biasanya ada di folder <i>Download</i>, <i>Music</i>, atau <i>WhatsApp/Media/WhatsApp Audio</i>; video di <i>DCIM</i>, <i>Movies</i>, atau <i>Download</i>.</li>
           <li><b>Pindah dari laptop ke HP:</b> pakai kabel USB, Quick Share/Nearby Share, atau unggah ke Google Drive lalu unduh di HP.</li>
-          <li><b>Di laptop:</b> seret banyak file atau satu folder sekaligus ke jendela aplikasi ini.</li>
+          <li><b>Beberapa folder:</b> ketuk <i>Pilih folder</i>, pilih folder pertama, lalu ketuk <i>Folder lain</i> untuk menambah folder berikutnya. Setelah semua terkumpul, ketuk <i>Tambahkan</i>. Lagu diurutkan per folder dan nama file (1, 2, … 10).</li>
+          <li><b>Tidak ada lagu dobel:</b> file yang sama dikenali dari isinya — walau namanya diganti atau ada di folder lain — dan otomatis dilewati.</li>
+          <li><b>Di laptop:</b> seret banyak file atau beberapa folder sekaligus ke jendela aplikasi ini.</li>
           <li><b>Video di galeri HP:</b> pilih lewat tombol di atas — atau setelah aplikasi dipasang, buka video di Galeri/File lalu <i>Bagikan → ${APP_NAME}</i>.</li>
           <li><b>Lama proses video:</b> umumnya beberapa detik sampai ±1 menit per lagu, tergantung panjang video dan kecepatan HP.</li>
           <li>Judul, artis, album, dan sampul dibaca otomatis dari file. Bisa diubah lewat menu ${icon('more')} → <i>Edit info lagu</i>.</li>
@@ -596,6 +601,12 @@ export function settingsView() {
           <span><kbd>L</kbd> Suka lagu ini</span>
           <span><kbd>/</kbd> Cari</span>
         </div>
+      </section>
+
+      <section class="panel">
+        <h2>${icon('shield')} Lagu dobel</h2>
+        <p class="muted">Lagu yang sama otomatis dilewati saat ditambahkan. Untuk membersihkan lagu dobel yang mungkin sudah tersimpan sebelumnya, ketuk tombol di bawah. Status suka, jumlah putar, dan playlist tetap dipertahankan.</p>
+        <button class="btn ghost" data-act="dedupe" ${n ? '' : 'disabled'}>${icon('search')} Cek lagu dobel</button>
       </section>
 
       <section class="panel danger-zone">

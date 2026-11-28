@@ -64,11 +64,54 @@ export const store = {
   recentlyPlayed(n = 12) {
     return this.all().filter((s) => s.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, n);
   },
-  findDuplicate(fileName, size) {
+  /** Cari lagu yang sama: berdasarkan sidik jari isi file, atau nama + ukuran file yang sama. */
+  findDuplicate(fileName, size, hash = null) {
+    if (hash) {
+      for (const s of this.songs.values()) if (s.srcHash === hash) return s;
+    }
     for (const s of this.songs.values()) {
+      if (hash && s.srcHash) continue; // sidik jari sudah dibandingkan di atas
       if ((s.fileName === fileName && s.size === size) || (s.origName === fileName && s.origSize === size)) return s;
     }
     return null;
+  },
+
+  findPlaylistByName(name) {
+    const n = name.trim().toLowerCase();
+    for (const p of this.playlists.values()) if (p.name.trim().toLowerCase() === n) return p;
+    return null;
+  },
+
+  /**
+   * Gabungkan lagu dobel: simpan satu (keepId), hapus sisanya. Status suka, jumlah putar,
+   * dan posisi di playlist dipindahkan ke lagu yang disimpan.
+   */
+  async mergeDuplicates(groups) {
+    const removeIds = [];
+    for (const { keepId, removeIds: rm } of groups) {
+      const keep = this.songs.get(keepId);
+      if (!keep) continue;
+      const others = rm.map((id) => this.songs.get(id)).filter(Boolean);
+      const liked = keep.liked || others.some((o) => o.liked);
+      const likedAt = Math.max(keep.likedAt || 0, ...others.map((o) => o.likedAt || 0));
+      const playCount = (keep.playCount || 0) + others.reduce((a, o) => a + (o.playCount || 0), 0);
+      const lastPlayed = Math.max(keep.lastPlayed || 0, ...others.map((o) => o.lastPlayed || 0));
+      await this.updateSong(keepId, { liked, likedAt: liked ? likedAt || Date.now() : 0, playCount, lastPlayed });
+      const rmSet = new Set(rm);
+      for (const pl of [...this.playlists.values()]) {
+        if (!pl.songIds.some((x) => rmSet.has(x))) continue;
+        const seen = new Set();
+        const ids = [];
+        for (const x of pl.songIds) {
+          const y = rmSet.has(x) ? keepId : x;
+          if (!seen.has(y)) { seen.add(y); ids.push(y); }
+        }
+        await this.savePlaylist({ ...pl, songIds: ids });
+      }
+      removeIds.push(...rm);
+    }
+    if (removeIds.length) await this.deleteSongs(removeIds);
+    return removeIds.length;
   },
   totalBytes() {
     let n = 0;
@@ -100,6 +143,15 @@ export const store = {
     else await db.del('covers', id);
     dropCover(id);
     await this.updateSong(id, { hasCover: !!blob, remoteCover: null, ...(color ? { color } : {}) });
+  },
+
+  /** Simpan perubahan kecil tanpa memicu render ulang (mis. sidik jari file). */
+  async patchSilently(id, patch) {
+    const s = this.songs.get(id);
+    if (!s) return;
+    const next = { ...s, ...patch };
+    this.songs.set(id, next);
+    try { await db.put('songs', next); } catch { /* abaikan */ }
   },
 
   async toggleLike(id) {

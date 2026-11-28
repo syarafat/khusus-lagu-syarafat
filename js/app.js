@@ -2,11 +2,12 @@
 import { store } from './store.js';
 import { Player } from './player.js';
 import { hydrateIcons, icon } from './icons.js';
-import { $, $$, esc, toast, isMobile, hydrateCovers, confirmDialog, openModal, openMenu, fmtBytes, likedCoverHTML, playlistCoverHTML } from './ui.js';
+import { $, $$, esc, toast, isMobile, hydrateCovers, confirmDialog, openModal, openMenu, fmtBytes, likedCoverHTML, playlistCoverHTML, coverHTML } from './ui.js';
+const coverHTMLsafe = (s) => coverHTML(s, 'sm');
 import * as A from './actions.js';
 import * as V from './views.js';
 import * as PUI from './playerui.js';
-import { importFiles, importLinks, onImportStatus } from './importer.js';
+import { importFiles, importLinks, onImportStatus, isMediaFile, sortEntries, fingerprint } from './importer.js';
 import { YTEngine } from './ytengine.js';
 
 const view = $('#view');
@@ -124,6 +125,7 @@ function mountView() {
       }
     });
     renderImportStatus(lastStatus);
+    renderStaged();
   }
   if (route.name === 'settings') fillStorageInfo();
 }
@@ -186,15 +188,16 @@ async function runImport(files, opts = {}) {
   const summary = await importFiles(files, opts);
   if (summary.nothing) {
     toast(summary.skipped ? 'File yang dipilih bukan lagu atau video' : 'Tidak ada file yang dipilih', { kind: 'warn' });
-    return;
+    return summary;
   }
   const n = summary.added.length;
   const parts = [];
   if (n) parts.push(`${n} lagu ditambahkan${summary.converted ? ` (${summary.converted} dari video → MP3)` : ''}`);
-  if (summary.dup) parts.push(`${summary.dup} sudah ada`);
+  if (summary.dup) parts.push(`${summary.dup} dilewati karena sudah ada`);
   if (summary.failed.length) parts.push(`${summary.failed.length} gagal`);
   if (summary.skipped) parts.push(`${summary.skipped} bukan lagu/video`);
   const msg = parts.join(' · ') || 'Tidak ada lagu baru';
+  if (opts.quiet) { if (n) requestPersist(); return summary; }
   if (summary.failed.length) {
     toast(msg, { kind: 'warn', action: { label: 'Detail', fn: () => showFailures(summary.failed) } });
   } else if (n && route.name !== 'library' && !opts.playlistId) {
@@ -203,6 +206,7 @@ async function runImport(files, opts = {}) {
     toast(msg);
   }
   if (n) requestPersist();
+  return summary;
 }
 
 async function runLinkImport(text, onProgress) {
@@ -248,8 +252,187 @@ function pickFiles(opts = {}) {
 function pickFolder() {
   const input = $('#folderInput');
   input.value = '';
-  input.onchange = () => { if (input.files.length) runImport([...input.files]); };
+  input.onchange = () => {
+    const files = [...input.files];
+    if (!files.length) return;
+    const groups = new Map();
+    for (const f of files) {
+      const rel = f.webkitRelativePath || f.name;
+      const parts = rel.split('/');
+      const root = parts.length > 1 ? parts[0] : 'Folder';
+      const folder = parts.slice(0, -1).join('/') || root;
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push({ file: f, folder });
+    }
+    groups.forEach((entries, root) => stageFolder(root, entries));
+  };
   input.click();
+}
+
+// ---------- Beberapa folder sekaligus ----------
+const staged = []; // [{ key, name, entries, skipped }]
+
+function stageFolder(name, entries) {
+  const media = sortEntries(entries.filter((e) => isMediaFile(e.file)));
+  const skipped = entries.length - media.length;
+  const key = `${name}|${media.length}|${media.reduce((a, e) => a + e.file.size, 0)}`;
+  if (staged.some((f) => f.key === key)) {
+    toast(`Folder "${name}" sudah ada di daftar`);
+    return;
+  }
+  staged.push({ key, name, entries: media, skipped });
+  if (route.name !== 'add') A.go('#/add');
+  else renderStaged();
+  toast(media.length ? `Folder "${name}": ${media.length} lagu/video ditemukan` : `Folder "${name}" tidak berisi lagu atau video`, { kind: media.length ? '' : 'warn' });
+}
+
+function renderStaged() {
+  const box = $('#stagedFolders');
+  if (!box) return;
+  if (!staged.length) { box.innerHTML = ''; return; }
+  const all = staged.flatMap((f) => f.entries);
+  const seen = new Set();
+  let dupCount = 0;
+  for (const e of all) {
+    const k = `${e.file.name}|${e.file.size}`;
+    if (seen.has(k) || store.findDuplicate(e.file.name, e.file.size)) dupCount++;
+    seen.add(k);
+  }
+  const makePl = store.settings.folderPlaylists !== false;
+  box.innerHTML = `
+    <section class="staged">
+      <div class="staged-head"><h3>${icon('folder')} Folder yang dipilih (${staged.length})</h3><button class="link-btn" data-act="unstage-all">Kosongkan</button></div>
+      ${staged.map((f, i) => {
+        const subs = new Set(f.entries.map((e) => e.folder)).size;
+        const vids = f.entries.filter((e) => !/^audio\//.test(e.file.type) && /\.(mp4|m4v|mov|webm|mkv|3gp|3g2|avi|wmv|flv|ts|mts)$/i.test(e.file.name)).length;
+        return `
+        <div class="staged-item">
+          <div class="staged-ic">${icon('folder')}</div>
+          <div class="staged-text"><b>${esc(f.name)}</b><small>${f.entries.length} file${vids ? ` (${vids} video → MP3)` : ''}${subs > 1 ? ` · ${subs} folder` : ''}${f.skipped ? ` · ${f.skipped} file lain diabaikan` : ''}</small></div>
+          <button class="icon-btn sm" data-act="unstage" data-i="${i}" aria-label="Hapus dari daftar">${icon('close')}</button>
+        </div>`;
+      }).join('')}
+      <details class="staged-list">
+        <summary>Lihat urutan lagu (${all.length})</summary>
+        <ol>${all.slice(0, 300).map((e) => `<li><span>${esc(e.file.name)}</span><small>${esc(e.folder)}</small></li>`).join('')}${all.length > 300 ? `<li class="muted">… dan ${all.length - 300} lainnya</li>` : ''}</ol>
+      </details>
+      ${dupCount ? `<p class="staged-dup">${icon('shield')} ${dupCount} file sudah ada di pustaka atau terpilih dua kali — akan <b>dilewati otomatis</b> agar tidak dobel.</p>` : ''}
+      <label class="check"><input type="checkbox" id="folderPl" ${makePl ? 'checked' : ''}><span>Buat <b>playlist untuk tiap folder</b> (nama playlist = nama folder)</span></label>
+      <div class="btn-row">
+        <button class="btn primary" data-act="import-staged" ${all.length ? '' : 'disabled'}>${icon('upload')} Tambahkan ${all.length} file</button>
+        <button class="btn ghost" data-act="pick-folder">${icon('plus')} Folder lain</button>
+      </div>
+    </section>`;
+  $('#folderPl').addEventListener('change', (e) => store.saveSettings({ folderPlaylists: e.target.checked }));
+}
+
+async function importStaged() {
+  const all = staged.flatMap((f) => f.entries);
+  if (!all.length) return;
+  const makePl = store.settings.folderPlaylists !== false;
+  staged.length = 0;
+  renderStaged();
+  const summary = await runImport(all, { quiet: true });
+  let made = 0;
+  if (makePl && summary.items) made = await createFolderPlaylists(summary.items);
+  const n = summary.added.length;
+  const parts = [];
+  if (n) parts.push(`${n} lagu ditambahkan${summary.converted ? ` (${summary.converted} dari video)` : ''}`);
+  if (summary.dup) parts.push(`${summary.dup} dilewati karena sudah ada`);
+  if (made) parts.push(`${made} playlist folder`);
+  if (summary.failed.length) parts.push(`${summary.failed.length} gagal`);
+  const msg = parts.join(' · ') || 'Tidak ada lagu baru';
+  if (summary.failed.length) toast(msg, { kind: 'warn', action: { label: 'Detail', fn: () => showFailures(summary.failed) } });
+  else toast(msg, { action: { label: 'Lihat', fn: () => { store.saveSettings({ libraryTab: made ? 'playlists' : 'songs', librarySort: 'folder' }); A.go('#/library'); } } });
+}
+
+/** Satu playlist untuk tiap folder yang berisi lagu. Folder yang sudah punya playlist cukup ditambah. */
+async function createFolderPlaylists(items) {
+  const byFolder = new Map();
+  for (const it of items) {
+    if (!it.id || !it.folder) continue;
+    if (!byFolder.has(it.folder)) byFolder.set(it.folder, []);
+    const ids = byFolder.get(it.folder);
+    if (!ids.includes(it.id)) ids.push(it.id);
+  }
+  const folders = [...byFolder.keys()];
+  const last = (f) => f.split('/').pop();
+  const nameOf = (f) => {
+    const clash = folders.filter((g) => last(g) === last(f)).length > 1;
+    const parts = f.split('/');
+    return clash && parts.length > 1 ? `${parts[parts.length - 2]} / ${last(f)}` : last(f);
+  };
+  let made = 0;
+  for (const f of folders) {
+    const name = nameOf(f);
+    const existing = store.findPlaylistByName(name);
+    if (existing) await store.addToPlaylist(existing.id, byFolder.get(f));
+    else { await store.createPlaylist(name, byFolder.get(f)); made++; }
+  }
+  return made;
+}
+
+// ---------- Cari & hapus lagu dobel ----------
+async function findDuplicateGroups(onProgress) {
+  const songs = store.all();
+  const map = new Map();
+  for (let i = 0; i < songs.length; i++) {
+    const s = songs[i];
+    let key = null;
+    if (s.source === 'youtube') key = `yt:${s.ytId}`;
+    else if (s.source === 'url') key = `url:${s.url}`;
+    else {
+      let h = s.audioHash;
+      if (!h) {
+        const blob = await store.audioBlob(s.id).catch(() => null);
+        h = blob ? await fingerprint(blob) : null;
+        if (h) {
+          const patch = { audioHash: h };
+          if (!s.convertedFrom && !s.srcHash) patch.srcHash = h; // file asli = file tersimpan
+          await store.patchSilently(s.id, patch);
+        }
+      }
+      if (h) key = `a:${h}`;
+    }
+    onProgress(i + 1, songs.length);
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(s);
+  }
+  const rank = (x) => (x.liked ? 1e12 : 0) + (x.playCount || 0) * 1e6 - (x.addedAt || 0) / 1e7;
+  return [...map.values()].filter((g) => g.length > 1).map((g) => {
+    const sorted = g.slice().sort((a, b) => rank(b) - rank(a));
+    return { keep: sorted[0], remove: sorted.slice(1) };
+  });
+}
+
+async function runDedupe(btn) {
+  if (!store.songs.size) { toast('Pustaka masih kosong'); return; }
+  const label = btn.textContent;
+  btn.disabled = true;
+  let groups;
+  try {
+    groups = await findDuplicateGroups((i, n) => { if (btn.isConnected) btn.textContent = `Memeriksa ${i}/${n}…`; });
+  } finally {
+    if (btn.isConnected) { btn.disabled = false; btn.textContent = label; }
+  }
+  if (!groups.length) { toast('Tidak ada lagu dobel. Pustaka kamu sudah rapi 👍'); return; }
+  const total = groups.reduce((a, g) => a + g.remove.length, 0);
+  openModal({
+    title: `${total} lagu dobel ditemukan`,
+    body: `<p class="modal-text">Lagu berikut tersimpan lebih dari sekali. Satu disimpan, salinannya dihapus. Status suka, jumlah putar, dan posisi di playlist tetap dipertahankan.</p>
+      <div class="dup-list">${groups.map((g) => `
+        <div class="dup-row">${coverHTMLsafe(g.keep)}<span><b>${esc(g.keep.title)}</b><small>${esc(g.keep.artist)}</small></span><em>${g.remove.length + 1}×</em></div>`).join('')}
+      </div>`,
+    actions: [
+      { label: 'Batal', kind: 'ghost' },
+      { label: `Hapus ${total} salinan`, kind: 'danger', onClick: async () => {
+        const n = await store.mergeDuplicates(groups.map((g) => ({ keepId: g.keep.id, removeIds: g.remove.map((x) => x.id) })));
+        toast(`${n} lagu dobel dihapus`);
+      } },
+    ],
+    onOpen: (root) => hydrateCovers(root),
+  });
 }
 
 async function requestPersist() {
@@ -292,7 +475,11 @@ async function filesFromDrop(dt) {
   const out = [];
   const walk = async (entry) => {
     if (entry.isFile) {
-      try { out.push(await new Promise((res, rej) => entry.file(res, rej))); } catch { /* lewati */ }
+      try {
+        const file = await new Promise((res, rej) => entry.file(res, rej));
+        const folder = entry.fullPath.replace(/^\//, '').split('/').slice(0, -1).join('/');
+        out.push({ file, folder });
+      } catch { /* lewati */ }
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
       let batch;
@@ -328,8 +515,18 @@ function setupDragDrop() {
     depth = 0;
     overlay.hidden = true;
     const pid = route.name === 'playlist' ? route.params[0] : null;
-    const files = await filesFromDrop(e.dataTransfer);
-    runImport(files, pid && store.playlists.has(pid) ? { playlistId: pid } : {});
+    const items = await filesFromDrop(e.dataTransfer);
+    const inFolder = items.filter((x) => !(x instanceof Blob) && x.folder);
+    if (inFolder.length && !pid) {
+      // Folder yang diseret masuk ke daftar folder (bisa beberapa sekaligus)
+      const groups = new Map();
+      inFolder.forEach((x) => { const root = x.folder.split('/')[0]; if (!groups.has(root)) groups.set(root, []); groups.get(root).push(x); });
+      groups.forEach((entries, root) => stageFolder(root, entries));
+      const loose = items.filter((x) => x instanceof Blob || !x.folder);
+      if (loose.length) runImport(loose);
+      return;
+    }
+    runImport(items, pid && store.playlists.has(pid) ? { playlistId: pid } : {});
   });
 }
 
@@ -429,6 +626,10 @@ async function handleAct(act, el, e) {
     // tambah lagu
     case 'pick-files': pickFiles(); break;
     case 'pick-folder': pickFolder(); break;
+    case 'import-staged': importStaged(); break;
+    case 'unstage': staged.splice(+el.dataset.i, 1); renderStaged(); break;
+    case 'unstage-all': staged.length = 0; renderStaged(); break;
+    case 'dedupe': runDedupe(el); break;
 
     // pustaka & pilih
     case 'lib-tab': exitSelecting(false); store.saveSettings({ libraryTab: el.dataset.tab }); renderView(false); break;

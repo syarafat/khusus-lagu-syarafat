@@ -191,7 +191,7 @@ async function buildSong(file, extra = {}) {
  * Video → MP3: sampul diambil lebih dulu (foto sampul di file, atau cuplikan terbaik),
  * lalu suaranya diubah ke MP3. Videonya sendiri tidak disimpan.
  */
-async function buildSongFromVideo(file, onProgress, onCover) {
+async function buildSongFromVideo(file, onProgress, onCover, extra = {}) {
   const tags = await readTags(file);
   const guess = guessFromFilename(file.name);
 
@@ -235,6 +235,7 @@ async function buildSongFromVideo(file, onProgress, onCover) {
     addedAt: Date.now(),
     playCount: 0,
     lastPlayed: 0,
+    ...extra,
   };
   return { song, coverBlob, audioBlob: blob };
 }
@@ -258,29 +259,59 @@ function setStatusCover(blob) {
   status.cover = blob ? URL.createObjectURL(blob) : null;
 }
 
+// ---------- Sidik jari file (untuk mencegah lagu dobel) ----------
+/**
+ * Sidik jari isi file: SHA-256 dari ukuran + potongan awal, tengah, dan akhir file.
+ * File yang sama tetap dikenali walau namanya diganti atau ada di folder lain.
+ */
+export async function fingerprint(blob) {
+  if (!(window.crypto && crypto.subtle)) return null;
+  try {
+    const size = blob.size;
+    const CH = 256 * 1024;
+    const parts = size <= CH * 3
+      ? [blob]
+      : [blob.slice(0, CH), blob.slice(Math.floor(size / 2) - CH / 2, Math.floor(size / 2) + CH / 2), blob.slice(size - CH)];
+    const buf = await new Blob([...parts, `|${size}`]).arrayBuffer();
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+    return [...digest.slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+const collator = new Intl.Collator('id', { numeric: true, sensitivity: 'base' });
+/** Urutan alami: "2 lagu" sebelum "10 lagu"; folder dulu, lalu nama file. */
+export function sortEntries(entries) {
+  return entries.slice().sort((a, b) => collator.compare(a.folder || '', b.folder || '') || collator.compare(a.file.name, b.file.name));
+}
+
 /**
  * Tambahkan banyak file. Mengembalikan ringkasan setelah semua selesai.
+ * input: daftar File, atau { file, folder } (folder = lokasi folder asal, mis. "Musik/Rock").
  * opts.playlistId: langsung masukkan ke playlist tersebut.
+ * Ringkasan berisi items: [{ folder, id }] — id lagu baru ATAU lagu lama yang sama (dobel).
  */
-export function importFiles(fileList, opts = {}) {
-  const files = [...fileList];
-  const audio = files.filter(isMediaFile);
-  const skipped = files.length - audio.length;
+export function importFiles(input, opts = {}) {
+  const entries = [...input].map((x) => (x instanceof Blob ? { file: x, folder: '' } : x));
+  const media = entries.filter((e) => isMediaFile(e.file));
+  const skipped = entries.length - media.length;
   return new Promise((resolve) => {
-    if (!audio.length) {
-      resolve({ added: [], dup: 0, failed: [], skipped, nothing: true });
+    if (!media.length) {
+      resolve({ added: [], dup: 0, failed: [], skipped, nothing: true, items: [] });
       return;
     }
-    pending.push(...audio.map((f) => ({ file: f, opts })));
+    const job = { items: media.map((e) => ({ folder: e.folder, id: null })), resolve };
+    pending.push(...media.map((e, i) => ({ file: e.file, folder: e.folder || '', opts, job, index: i })));
     if (!status.running) {
       Object.assign(status, { running: true, total: 0, done: 0, added: 0, converted: 0, dup: 0, failed: [], skipped: 0, addedIds: [] });
     }
-    status.total += audio.length;
+    status.total += media.length;
     status.skipped += skipped;
-    finishedCallbacks.push(resolve);
+    finishedCallbacks.push(job);
     emitStatus();
     if (!looping) {
-      looping = true; // diset sebelum runLoop: bisa selesai seketika (mis. semua file duplikat)
+      looping = true; // diset sebelum runLoop: bisa selesai seketika (mis. semua file dobel)
       runLoop();
     }
   });
@@ -289,17 +320,20 @@ export function importFiles(fileList, opts = {}) {
 async function runLoop() {
   try {
     while (pending.length) {
-      const { file, opts } = pending.shift();
-      status.current = file.name;
+      const { file, folder, opts, job, index } = pending.shift();
+      status.current = folder ? `${folder}/${file.name}` : file.name;
       status.note = '';
       status.pct = 0;
       setStatusCover(null);
       emitStatus();
       try {
-        const dup = store.findDuplicate(file.name, file.size);
+        const hash = await fingerprint(file);
+        const dup = store.findDuplicate(file.name, file.size, hash);
+        let songId;
         if (dup) {
           status.dup++;
-          if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [dup.id]);
+          songId = dup.id;
+          if (hash && !dup.srcHash) store.updateSong(dup.id, { srcHash: hash }).catch(() => {});
         } else if (isVideoFile(file)) {
           let last = 0;
           const { song, coverBlob, audioBlob } = await buildSongFromVideo(file, (pct, note) => {
@@ -310,19 +344,21 @@ async function runLoop() {
           }, (cover) => {
             setStatusCover(cover);
             emitStatus();
-          });
+          }, { folder, srcHash: hash });
           await store.addSong(song, audioBlob, coverBlob);
           status.added++;
           status.converted++;
           status.addedIds.push(song.id);
-          if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [song.id]);
+          songId = song.id;
         } else {
-          const { song, coverBlob } = await buildSong(file);
+          const { song, coverBlob } = await buildSong(file, { folder, srcHash: hash });
           await store.addSong(song, file, coverBlob);
           status.added++;
           status.addedIds.push(song.id);
-          if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [song.id]);
+          songId = song.id;
         }
+        job.items[index].id = songId;
+        if (opts.playlistId) await store.addToPlaylist(opts.playlistId, [songId]);
       } catch (err) {
         if (err && (err.name === 'QuotaExceededError' || /quota/i.test(err.message || ''))) {
           status.failed.push({ name: file.name, reason: 'Penyimpanan penuh' });
@@ -348,10 +384,10 @@ async function runLoop() {
     status.note = '';
     setStatusCover(null);
     emitStatus();
-    const cbs = finishedCallbacks;
+    const jobs = finishedCallbacks;
     finishedCallbacks = [];
     looping = false;
-    cbs.forEach((cb) => cb(summary));
+    jobs.forEach((j) => j.resolve({ ...summary, items: j.items }));
   }
 }
 
