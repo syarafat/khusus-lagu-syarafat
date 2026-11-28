@@ -203,6 +203,7 @@ export function homeView() {
       <h1>${greeting()}</h1>
       <div class="head-actions">
         <button class="chip install-chip" data-act="install" hidden>${icon('install')} Pasang aplikasi</button>
+        <button class="chip" data-act="together" title="Dengar lagu bareng di dua HP">${icon('users')} Dengar Bareng</button>
         <a class="icon-btn mobile-only" href="#/settings" aria-label="Pengaturan">${icon('settings')}</a>
       </div>
     </header>`;

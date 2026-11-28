@@ -141,6 +141,7 @@ export function openModal({ title, body = '', actions = [], onOpen, wide = false
   const destroy = () => {
     if (closed) return;
     closed = true;
+    scrim.dataset.closing = '1';
     scrim.classList.remove('in');
     setTimeout(() => scrim.remove(), 200);
     document.removeEventListener('keydown', onKey, true);

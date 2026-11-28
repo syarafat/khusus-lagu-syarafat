@@ -76,6 +76,7 @@
         </div>
       </div>
       <div class="p-right">
+        <button class="icon-btn" data-act="together" title="Dengar Bareng" aria-label="Dengar Bareng"><i data-icon="users"></i></button>
         <button class="icon-btn toggle" id="pQueueBtn" data-act="queue" title="Antrean" aria-label="Antrean"><i data-icon="queue"></i></button>
         <button class="icon-btn" id="pMute" data-act="mute" title="Bisukan" aria-label="Bisukan"><i data-icon="volume"></i></button>
         <input type="range" class="range vol" id="pVol" min="0" max="100" value="80" aria-label="Volume">
@@ -128,6 +129,7 @@
         </div>
         <div class="np-extra">
           <button class="icon-btn toggle" id="npSleep" data-act="sleep" aria-label="Timer tidur"><i data-icon="timer"></i><span class="sleep-label" id="npSleepLabel"></span></button>
+          <button class="icon-btn np-together" data-act="together" aria-label="Dengar Bareng"><i data-icon="users"></i><span>Dengar Bareng</span></button>
           <button class="icon-btn" data-act="queue" aria-label="Antrean"><i data-icon="queue"></i></button>
         </div>
       </div>
@@ -143,6 +145,8 @@
       <button class="icon-btn sm" data-act="yt-close" aria-label="Tutup video" title="Hentikan & tutup video"><i data-icon="close"></i></button>
     </div>
   </div>
+
+  <button class="together-pill" id="togetherPill" data-act="together" hidden></button>
 
   <div id="layer"></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>

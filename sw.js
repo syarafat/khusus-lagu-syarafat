@@ -1,6 +1,6 @@
 // Service worker: membuat aplikasi bisa dibuka tanpa internet & menerima file yang dibagikan.
 // Naikkan VERSION setiap kali file aplikasi diubah agar pengguna mendapat versi baru.
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.5.0';
 const CACHE = `lagu-${VERSION}`;
 const ASSETS = [
   './',
@@ -22,6 +22,9 @@ const ASSETS = [
   'js/convert.js',
   'js/mp3worker.js',
   'js/vendor/lame.min.js',
+  'js/together.js',
+  'js/togetherui.js',
+  'js/vendor/peerjs.min.js',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',

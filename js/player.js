@@ -34,6 +34,9 @@ export class Player extends EventTarget {
     this.fading = false;
     this.lastSave = 0;
     this.lastPos = 0;
+    this.remote = null; // mode tamu Dengar Bareng: { command(c) }
+    this.remoteSong = null;
+    this.snapshot = null;
 
     audio.volume = store.settings.volume ?? 0.8;
     audio.muted = !!store.settings.muted;
@@ -71,8 +74,14 @@ export class Player extends EventTarget {
 
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
 
-  get current() { return this.index >= 0 ? store.get(this.queue[this.index]) || null : null; }
-  get currentId() { return this.index >= 0 ? this.queue[this.index] : null; }
+  get current() {
+    if (this.remote) return this.remoteSong;
+    return this.index >= 0 ? store.get(this.queue[this.index]) || null : null;
+  }
+  get currentId() {
+    if (this.remote) return this.remoteSong ? this.remoteSong.id : null;
+    return this.index >= 0 ? this.queue[this.index] : null;
+  }
   get isYouTube() { return this.current?.source === 'youtube'; }
   /** Mesin yang sedang dipakai lagu sekarang. */
   get media() { return this.isYouTube ? this.yt : this.audio; }
@@ -87,11 +96,20 @@ export class Player extends EventTarget {
   get isLoaded() {
     const s = this.current;
     if (!s) return false;
+    if (this.remote) return !!this.audio.getAttribute('src');
     return s.source === 'youtube' ? this.yt.active && this.yt.videoId === s.ytId : !!this.audio.getAttribute('src');
+  }
+
+  /** Saat jadi tamu Dengar Bareng, lagu diatur HP pembuat sesi. */
+  blockedByRemote() {
+    if (!this.remote) return false;
+    this.emit('error', 'Kamu sedang Dengar Bareng. Lagu diatur oleh HP pembuat sesi — keluar dari sesi untuk memutar lagumu sendiri.');
+    return true;
   }
 
   // ---------- Memutar ----------
   async playList(ids, start = 0, context = null, opts = {}) {
+    if (this.blockedByRemote()) return;
     ids = ids.filter((id) => store.get(id));
     if (!ids.length) return;
     this.errorStreak = 0;
@@ -196,6 +214,7 @@ export class Player extends EventTarget {
   }
 
   play() {
+    if (this.remote) { this.remote.command({ c: 'play' }); return; }
     if (!this.current) {
       const all = store.all().sort((a, b) => b.addedAt - a.addedAt).map((s) => s.id);
       if (all.length) this.playList(all, this.shuffle ? -1 : 0, { type: 'library', id: null, label: 'Semua lagu' });
@@ -205,10 +224,14 @@ export class Player extends EventTarget {
     this.safePlay();
   }
 
-  pause() { this.media.pause(); }
+  pause() {
+    if (this.remote) { this.remote.command({ c: 'pause' }); return; }
+    this.media.pause();
+  }
   toggle() { if (this.isPlaying) this.pause(); else this.play(); }
 
   next(auto = false) {
+    if (this.remote) { if (!auto) this.remote.command({ c: 'next' }); return; }
     if (!this.queue.length) return;
     if (!auto) this.errorStreak = 0;
     if (this.index < this.queue.length - 1) {
@@ -229,6 +252,7 @@ export class Player extends EventTarget {
   }
 
   prev() {
+    if (this.remote) { this.remote.command({ c: 'prev' }); return; }
     if (!this.queue.length) return;
     this.errorStreak = 0;
     if (this.media.currentTime > 3 || (this.index === 0 && this.repeat !== 'all')) {
@@ -245,6 +269,7 @@ export class Player extends EventTarget {
   }
 
   seek(t) {
+    if (this.remote) { this.remote.command({ c: 'seek', v: Math.max(0, t) }); return; }
     const d = this.duration;
     if (!d || !this.isLoaded) { this.lastPos = Math.max(0, t); this.emit('time'); return; }
     try { this.media.currentTime = Math.max(0, Math.min(d - 0.05, t)); } catch { /* abaikan */ }
@@ -270,6 +295,7 @@ export class Player extends EventTarget {
   }
 
   toggleShuffle() {
+    if (this.blockedByRemote()) return;
     this.shuffle = !this.shuffle;
     store.saveSettings({ shuffle: this.shuffle });
     const cur = this.currentId;
@@ -296,6 +322,7 @@ export class Player extends EventTarget {
   }
 
   cycleRepeat() {
+    if (this.blockedByRemote()) return;
     this.repeat = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off';
     store.saveSettings({ repeat: this.repeat });
     this.emit('modes');
@@ -303,6 +330,7 @@ export class Player extends EventTarget {
 
   // ---------- Antrean ----------
   playNext(ids) {
+    if (this.blockedByRemote()) return;
     ids = ids.filter((id) => store.get(id));
     if (!ids.length) return;
     if (!this.queue.length) { this.playList(ids, 0, { type: 'queue', id: null, label: 'Antrean' }); return; }
@@ -313,6 +341,7 @@ export class Player extends EventTarget {
   }
 
   addToQueue(ids) {
+    if (this.blockedByRemote()) return;
     ids = ids.filter((id) => store.get(id));
     if (!ids.length) return;
     if (!this.queue.length) { this.playList(ids, 0, { type: 'queue', id: null, label: 'Antrean' }); return; }
@@ -323,6 +352,7 @@ export class Player extends EventTarget {
   }
 
   jumpTo(i) {
+    if (this.remote) return;
     if (i < 0 || i >= this.queue.length) return;
     this.errorStreak = 0;
     this.index = i;
@@ -330,6 +360,7 @@ export class Player extends EventTarget {
   }
 
   removeAt(i) {
+    if (this.remote) return;
     if (i < 0 || i >= this.queue.length) return;
     const id = this.queue[i];
     this.queue.splice(i, 1);
@@ -395,6 +426,10 @@ export class Player extends EventTarget {
   }
 
   onSongsDeleted(ids) {
+    if (this.remote) {
+      if (this.snapshot) this.snapshot.queue = this.snapshot.queue.filter((id) => !ids.includes(id));
+      return;
+    }
     if (!this.queue.length) return;
     const gone = new Set(ids);
     const cur = this.currentId;
@@ -447,6 +482,7 @@ export class Player extends EventTarget {
   }
 
   onEnded() {
+    if (this.remote) return; // HP pembuat sesi yang menentukan lagu berikutnya
     if (this.sleep && this.sleep.mode === 'track') {
       this.clearSleep();
       this.media.currentTime = 0;
@@ -478,6 +514,7 @@ export class Player extends EventTarget {
 
   fail(msg) {
     this.emit('error', msg);
+    if (this.remote) { this.onState(); return; }
     this.errorStreak++;
     if (this.errorStreak < Math.min(5, this.queue.length) && this.queue.length > 1) {
       setTimeout(() => this.next(true), 600);
@@ -585,8 +622,69 @@ export class Player extends EventTarget {
     } catch { /* abaikan */ }
   }
 
+  // ---------- Mode tamu Dengar Bareng ----------
+  enterRemote(remote) {
+    this.snapshot = { queue: this.queue.slice(), original: this.original, index: this.index, context: this.context, time: this.time };
+    this.token++;
+    this.audio.pause();
+    this.yt.stop();
+    this.remote = remote;
+    this.remoteSong = null;
+    this.context = { type: 'together', id: null, label: 'Dengar Bareng' };
+    this.emit('queue');
+    this.emit('track');
+    this.onState();
+  }
+
+  /** Muat lagu dari sesi (blob dari HP pembuat sesi, atau url). src null = hanya tampilkan info. */
+  loadRemote(song, src) {
+    const token = ++this.token;
+    this.remoteSong = song;
+    this.queue = [song.id];
+    this.index = 0;
+    this.counted = true;
+    this.audio.pause();
+    if (this.objectUrl) { URL.revokeObjectURL(this.objectUrl); this.objectUrl = null; }
+    if (!src) {
+      this.audio.removeAttribute('src');
+      try { this.audio.load(); } catch { /* abaikan */ }
+      this.emit('queue'); this.emit('track'); this.updateMediaSession(); this.onState();
+      return Promise.resolve();
+    }
+    if (src.blob) { this.objectUrl = URL.createObjectURL(src.blob); this.audio.src = this.objectUrl; }
+    else this.audio.src = src.url;
+    this.emit('queue'); this.emit('track'); this.updateMediaSession(); this.onState();
+    return new Promise((resolve) => {
+      const done = () => { this.audio.removeEventListener('loadedmetadata', done); this.audio.removeEventListener('error', done); resolve(token === this.token); };
+      this.audio.addEventListener('loadedmetadata', done);
+      this.audio.addEventListener('error', done);
+      setTimeout(done, 8000);
+    });
+  }
+
+  exitRemote() {
+    this.token++;
+    this.remote = null;
+    this.remoteSong = null;
+    this.audio.pause();
+    this.audio.playbackRate = 1;
+    this.audio.removeAttribute('src');
+    try { this.audio.load(); } catch { /* abaikan */ }
+    if (this.objectUrl) { URL.revokeObjectURL(this.objectUrl); this.objectUrl = null; }
+    const snap = this.snapshot;
+    this.snapshot = null;
+    this.queue = snap ? snap.queue.filter((id) => store.get(id)) : [];
+    this.original = snap && snap.original ? snap.original.filter((id) => store.get(id)) : null;
+    this.context = (snap && snap.context) || { type: 'library', id: null, label: 'Semua lagu' };
+    this.index = snap ? Math.min(snap.index, this.queue.length - 1) : -1;
+    this.emit('queue');
+    if (this.index >= 0) this.load(false, snap.time || 0);
+    else { this.emit('track'); this.onState(); this.updateMediaSession(); }
+  }
+
   // ---------- Simpan & pulihkan ----------
   save(force = false) {
+    if (this.remote) return; // jangan timpa antrean milik sendiri saat jadi tamu
     if (!force && Date.now() - this.lastSave < 2000) return;
     this.lastSave = Date.now();
     try {

@@ -201,7 +201,8 @@ export const store = {
 
   coverUrl(id) {
     const s = this.songs.get(id);
-    if (!s || !s.hasCover) return Promise.resolve(null);
+    if (!s) return coverCache.get(id) || Promise.resolve(null); // sampul sementara (Dengar Bareng)
+    if (!s.hasCover) return Promise.resolve(null);
     if (s.remoteCover) return Promise.resolve(s.remoteCover);
     if (!coverCache.has(id)) {
       coverCache.set(id, db.get('covers', id).then((b) => {
@@ -215,6 +216,12 @@ export const store = {
   },
 
   /** URL sampul bila sudah pernah dimuat (agar tidak berkedip saat render ulang). */
+  /** Sampul sementara untuk lagu yang bukan milik pustaka (mis. dari Dengar Bareng). */
+  registerTempCover(id, url) {
+    coverReady.set(id, url);
+    coverCache.set(id, Promise.resolve(url));
+  },
+
   coverUrlSync(id) {
     const s = this.songs.get(id);
     if (s && s.hasCover && s.remoteCover) return s.remoteCover;

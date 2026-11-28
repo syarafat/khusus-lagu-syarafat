@@ -23,6 +23,10 @@ Aplikasi ini berupa *Progressive Web App* (PWA): dibuka lewat browser, lalu bisa
 - **Anti dobel**: file yang sama dikenali dari isinya (walau namanya diganti atau ada di
   folder lain) dan otomatis dilewati. Di *Pengaturan → Lagu dobel* ada tombol untuk
   membersihkan lagu dobel lama (status suka, jumlah putar, dan playlist dipertahankan).
+- **Dengar Bareng**: putar lagu yang sama di dua HP (atau lebih, maks. 6 teman) di detik
+  yang sama. Satu HP membuat sesi dan mendapat kode 6 angka / link undangan; HP teman
+  bergabung dan ikut memutar — teman tidak perlu punya lagunya. Putar, jeda, geser, dan
+  ganti lagu tersinkron; teman juga bisa menekan putar/jeda/ganti lagu.
 - **Hapus lagu**: satu per satu (menu ⋯ → *Hapus lagu dari perangkat*) atau banyak
   sekaligus (tombol **Pilih** → centang → 🗑).
 - Judul, artis, album, dan **sampul dibaca otomatis** dari file (MP3, M4A, FLAC, OGG, OPUS, WAV).
@@ -95,7 +99,47 @@ kecepatan HP. Biarkan aplikasi tetap terbuka sampai selesai. Batas ukuran video 
 Video tanpa suara atau format yang tidak didukung browser (mis. AVI/WMV) akan dilewati
 dengan pesan.
 
-## Dari mana dapat lagu?## Dari mana dapat lagu?
+## Dengar Bareng (dua HP, lagu sama, bersamaan)
+
+1. Di HP pertama: ketuk **Dengar Bareng** (di Beranda, atau di layar *Sedang diputar*) →
+   isi nama → **Buat sesi di HP ini**. Muncul **kode 6 angka**.
+2. Ketuk **Kirim undangan** untuk mengirim link lewat WhatsApp, atau sebutkan kodenya.
+3. Di HP teman: buka link undangan (atau buka aplikasi → *Dengar Bareng* → masukkan kode)
+   → **Gabung**.
+4. Putar lagu seperti biasa di HP pertama. HP teman ikut memutar lagu yang sama di detik
+   yang sama. Teman juga bisa menekan putar/jeda/berikutnya.
+
+Cara kerja & catatan:
+
+- Butuh **internet** di kedua HP selama sesi. Sambungan diatur lewat server
+  [PeerJS](https://peerjs.com) (gratis, sumber terbuka); lagu dikirim **langsung antar-HP**
+  (atau lewat server perantara PeerJS bila jaringan tidak memungkinkan sambungan langsung).
+- Lagu yang dikirim hanya disimpan sementara di memori HP teman — **tidak masuk** ke
+  pustakanya. Jika HP teman sudah punya lagu yang sama, lagunya langsung dipakai tanpa dikirim.
+- Kode aktif selama aplikasi di HP pembuat sesi tetap terbuka.
+- Pakai earphone Bluetooth dan terasa tidak pas? Di HP teman: *Dengar Bareng → Atur jeda HP ini*.
+
+## Dari mana dapat lagu?## Dengar Bareng (dua HP, lagu sama, bersamaan)
+
+1. Di HP pertama: ketuk **Dengar Bareng** (di Beranda, atau di layar *Sedang diputar*) →
+   isi nama → **Buat sesi di HP ini**. Muncul **kode 6 angka**.
+2. Ketuk **Kirim undangan** untuk mengirim link lewat WhatsApp, atau sebutkan kodenya.
+3. Di HP teman: buka link undangan (atau buka aplikasi → *Dengar Bareng* → masukkan kode)
+   → **Gabung**.
+4. Putar lagu seperti biasa di HP pertama. HP teman ikut memutar lagu yang sama di detik
+   yang sama. Teman juga bisa menekan putar/jeda/berikutnya.
+
+Cara kerja & catatan:
+
+- Butuh **internet** di kedua HP selama sesi. Sambungan diatur lewat server
+  [PeerJS](https://peerjs.com) (gratis, sumber terbuka); lagu dikirim **langsung antar-HP**
+  (atau lewat server perantara PeerJS bila jaringan tidak memungkinkan sambungan langsung).
+- Lagu yang dikirim hanya disimpan sementara di memori HP teman — **tidak masuk** ke
+  pustakanya. Jika HP teman sudah punya lagu yang sama, lagunya langsung dipakai tanpa dikirim.
+- Kode aktif selama aplikasi di HP pembuat sesi tetap terbuka.
+- Pakai earphone Bluetooth dan terasa tidak pas? Di HP teman: *Dengar Bareng → Atur jeda HP ini*.
+
+## Dari mana dapat lagu?
 
 Di dalam aplikasi ada halaman **Tambah Lagu → Dari mana dapat lagu?** Ringkasnya:
 
@@ -135,12 +179,15 @@ js/importer.js        proses tambah lagu (file & link), sampul
 js/convert.js         video → MP3 (suara via Web Audio) + sampul (bawaan MP4/MKV atau cuplikan terbaik)
 js/mp3worker.js       encoder MP3 di Web Worker
 js/vendor/lame.min.js lamejs (LAME MP3 encoder), LGPL-3.0 — lihat js/vendor/LAME-LICENSE.txt
+js/together.js        Dengar Bareng: sesi, sinkronisasi jam & posisi, kirim lagu antar-HP
+js/togetherui.js      tampilan Dengar Bareng
+js/vendor/peerjs.min.js PeerJS (WebRTC), MIT — lihat js/vendor/PEERJS-LICENSE.txt
 js/ytengine.js        pemutar YouTube (hanya untuk lagu YouTube yang sudah terlanjur ditambahkan)
 js/metadata.js        pembaca tag ID3/FLAC/MP4/Ogg/WAV
 js/store.js, db.js    data di memori + IndexedDB
 sw.js                 service worker (offline & share target)
 ```
 
-Tidak ada *build step*. Satu-satunya pustaka luar adalah encoder MP3 lamejs (disertakan di repo). Setiap kali mengubah file aplikasi,
+Tidak ada *build step*. Pustaka luar (disertakan di repo): lamejs (encoder MP3) dan PeerJS (Dengar Bareng). Setiap kali mengubah file aplikasi,
 **naikkan `VERSION` di `sw.js`** agar pengguna mendapat notifikasi "Versi baru tersedia".
 Nama aplikasi bisa diganti di `index.html`, `manifest.webmanifest`, dan `APP_NAME` di `js/views.js`.

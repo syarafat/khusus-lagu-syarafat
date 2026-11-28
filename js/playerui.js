@@ -102,7 +102,7 @@ function renderTrack() {
   ['#pLike', '#npLike'].forEach((sel) => {
     const b = $(sel);
     b.classList.toggle('on', liked);
-    b.disabled = !s;
+    b.disabled = !s || !store.get(s.id); // lagu dari Dengar Bareng bukan milik pustaka
     setIcon(b, liked ? 'heartFill' : 'heart');
     b.setAttribute('aria-label', liked ? 'Hapus dari Lagu Disukai' : 'Simpan ke Lagu Disukai');
   });

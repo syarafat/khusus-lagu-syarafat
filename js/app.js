@@ -9,6 +9,7 @@ import * as V from './views.js';
 import * as PUI from './playerui.js';
 import { importFiles, importLinks, onImportStatus, isMediaFile, sortEntries, fingerprint } from './importer.js';
 import { YTEngine } from './ytengine.js';
+import { initTogetherUI, openTogether } from './togetherui.js';
 
 const view = $('#view');
 const main = $('#main');
@@ -37,6 +38,13 @@ function buildView(r) {
     case 'add': return V.addView();
     case 'sources': return V.sourcesView();
     case 'settings': return V.settingsView();
+    case 'join': {
+      // Link undangan Dengar Bareng: #/join/123456
+      const code = (r.params[0] || '').replace(/\D/g, '').slice(0, 6);
+      setTimeout(() => { history.replaceState(null, '', '#/home'); route = parseRoute(); renderView(false); openTogether(code); }, 0);
+      r.name = 'home';
+      return V.homeView();
+    }
     default: r.name = 'home'; return V.homeView();
   }
 }
@@ -580,7 +588,8 @@ async function handleAct(act, el, e) {
     case 'yt-close': player.stopYouTube(); break;
     case 'np-menu': PUI.nowPlayingMenu(el); break;
     case 'sleep': PUI.sleepMenu(el); break;
-    case 'like-current': if (player.current) A.toggleLike(player.current.id); break;
+    case 'like-current': if (player.current && store.get(player.current.id)) A.toggleLike(player.current.id); break;
+    case 'together': openTogether(); break;
 
     // daftar lagu
     case 'like': A.toggleLike(id); break;
@@ -890,6 +899,7 @@ async function boot() {
   player = new Player($('#audio'), new YTEngine('ytMount'));
   A.ctx.player = player;
   PUI.initPlayerUI(player);
+  initTogetherUI(player);
   player.restore();
 
   store.subscribe((type, detail) => {

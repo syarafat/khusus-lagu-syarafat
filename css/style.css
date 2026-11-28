@@ -756,6 +756,58 @@ textarea.input { height: auto; min-height: 76px; padding: 12px 14px; resize: ver
 .cn-ic .ic { width: 20px; height: 20px; }
 .mini-shuffle { display: none; }
 
+/* Dengar Bareng */
+body.tg-on .main { padding-top: 48px; }
+body.np-open .together-pill, body.queue-open .together-pill { display: none; }
+.together-pill {
+  position: fixed; z-index: 70; top: 18px; right: 22px;
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px;
+  border: 0; border-radius: 18px; background: var(--accent); color: var(--on-accent);
+  font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  max-width: calc(100vw - 32px);
+}
+.together-pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.together-pill .ic { width: 18px; height: 18px; }
+.together-pill.live .ic { animation: tg-pulse 1.6s ease-in-out infinite; }
+@keyframes tg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.np-together { width: auto; padding: 0 12px; border-radius: 18px; display: inline-flex; gap: 6px; font-size: 12px; font-weight: 600; }
+.np-together span { white-space: nowrap; }
+.tg-wide { width: 100%; margin-top: 12px; }
+.tg-or { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; color: var(--muted); font-size: 13px; }
+.tg-or::before, .tg-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.tg-join { display: flex; gap: 10px; }
+.tg-code { flex: 1; min-width: 0; text-align: center; font-size: 20px; letter-spacing: 0.18em; font-weight: 700; }
+.tg-note { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.tg-note .ic { flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.tg-note b { color: var(--text); }
+.tg-wait { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 0; color: var(--muted); }
+.tg-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: tg-rot 0.9s linear infinite; }
+@keyframes tg-rot { to { transform: rotate(360deg); } }
+.tg-codebox { margin: 14px 0; padding: 16px; border-radius: 12px; text-align: center; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent); }
+.tg-codebox small { display: block; color: var(--muted); font-size: 11px; letter-spacing: 0.14em; }
+.tg-codebox strong { display: block; margin-top: 4px; font-size: 40px; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
+.tg-share { margin-top: 0; }
+.tg-sub { margin: 20px 0 8px; font-size: 15px; }
+.tg-guests { display: grid; gap: 6px; }
+.tg-guest, .tg-hostbox { display: flex; align-items: center; gap: 12px; }
+.tg-guest { padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
+.tg-guest span, .tg-hostbox span { min-width: 0; display: flex; flex-direction: column; }
+.tg-guest small, .tg-hostbox small { color: var(--muted); font-size: 12px; }
+.tg-hostbox small { font-size: 10px; letter-spacing: 0.12em; }
+.tg-hostbox b { font-size: 18px; }
+.tg-hostbox em { font-style: normal; color: var(--accent); font-size: 13px; margin-top: 2px; }
+.tg-ava { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 800; }
+.tg-ava.big { width: 52px; height: 52px; font-size: 22px; }
+.tg-now { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); font-size: 14px; color: var(--muted); }
+.tg-now .ic { width: 16px; height: 16px; color: var(--accent); flex: none; }
+.tg-now b { color: var(--text); }
+.tg-delay { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.tg-delay span { flex: 1; text-align: center; font-size: 13px; font-weight: 600; }
+@media (max-width: 760px) {
+  body.tg-on .main { padding-top: calc(52px + env(safe-area-inset-top)); }
+  .together-pill { top: calc(10px + env(safe-area-inset-top)); right: 50%; transform: translateX(50%); }
+}
+
 /* Daftar folder yang dipilih */
 .staged { max-width: 760px; margin: 0 var(--gut) 16px; padding: 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
 .staged-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
