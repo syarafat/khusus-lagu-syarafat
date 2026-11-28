@@ -75,10 +75,14 @@ Mau file **APK** sungguhan? Setelah aplikasi online, masukkan link-nya di
 Buka **Tambah → Pilih lagu / video**, lalu pilih video dari galeri atau folder HP. Bisa
 dicampur dengan file MP3 dan bisa banyak sekaligus. Untuk setiap video, aplikasi akan:
 
-1. mengambil suaranya (videonya tidak disimpan),
-2. mengubahnya menjadi **MP3** (128 kbps),
-3. mengambil satu gambar dari video sebagai **sampul**,
-4. membaca judul/artis dari info video atau dari nama file (mis. `Artis - Judul.mp4`).
+1. **mengambil foto sampul lebih dulu**: foto sampul yang tersimpan di dalam file video
+   (MP4 atau lampiran "cover" di MKV) bila ada; jika tidak ada, aplikasi mengecek beberapa
+   cuplikan video dan memilih gambar yang paling jelas (bukan layar hitam). Sampul langsung
+   tampil di kartu progres,
+2. mengambil suaranya lalu mengubahnya menjadi **MP3** (128 kbps) — videonya tidak disimpan,
+3. membaca judul/artis dari info video atau dari nama file (mis. `Artis - Judul.mp4`).
+
+Sampul bisa diganti kapan saja lewat menu ⋯ → *Edit info lagu* → *Ganti sampul*.
 
 Lama proses biasanya beberapa detik sampai ±1 menit per lagu, tergantung panjang video dan
 kecepatan HP. Biarkan aplikasi tetap terbuka sampai selesai. Batas ukuran video 350 MB.
@@ -122,7 +126,7 @@ js/player.js          mesin pemutar, antrean, Media Session, timer tidur
 js/playerui.js        bar pemutar, layar "Sedang diputar", panel antrean
 js/actions.js         menu lagu, playlist, edit, hapus
 js/importer.js        proses tambah lagu (file & link), sampul
-js/convert.js         video → MP3 (ambil suara dengan Web Audio, sampul dari gambar video)
+js/convert.js         video → MP3 (suara via Web Audio) + sampul (bawaan MP4/MKV atau cuplikan terbaik)
 js/mp3worker.js       encoder MP3 di Web Worker
 js/vendor/lame.min.js lamejs (LAME MP3 encoder), LGPL-3.0 — lihat js/vendor/LAME-LICENSE.txt
 js/ytengine.js        pemutar YouTube (hanya untuk lagu YouTube yang sudah terlanjur ditambahkan)

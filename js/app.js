@@ -149,16 +149,19 @@ function statusHTML(st, big) {
   const pct = st.total ? Math.min(100, Math.round(((st.done + part) / st.total) * 100)) : 0;
   const converting = st.running && st.note;
   const head = st.running
-    ? (converting ? `${esc(st.note)}… ${st.pct || 0}%` : `Menambahkan lagu… ${st.done} dari ${st.total}`)
+    ? (converting ? `${esc(st.note)}…${st.pct ? ` ${st.pct}%` : ''}` : `Menambahkan lagu… ${st.done} dari ${st.total}`)
     : 'Selesai';
   const detail = st.running
     ? `${st.total > 1 ? `${st.done + 1} dari ${st.total} · ` : ''}${esc(st.current)}`
     : `${st.added} ditambahkan${st.converted ? ` (${st.converted} dari video)` : ''}${st.dup ? ` · ${st.dup} sudah ada` : ''}${st.failed?.length ? ` · ${st.failed.length} gagal` : ''}`;
   return `
-    <div class="imp${big ? ' big' : ''}">
-      <div class="imp-head">${icon(st.running ? (converting ? 'wave' : 'upload') : 'check')}<b>${head}</b></div>
-      <div class="imp-bar"><div style="width:${pct}%"></div></div>
-      <small>${detail}</small>
+    <div class="imp${big ? ' big' : ''}${st.running && st.cover ? ' has-cover' : ''}">
+      ${st.running && st.cover ? `<img class="imp-cover" src="${st.cover}" alt="Sampul">` : ''}
+      <div class="imp-main">
+        <div class="imp-head">${icon(st.running ? (converting ? 'wave' : 'upload') : 'check')}<b>${head}</b></div>
+        <div class="imp-bar"><div style="width:${pct}%"></div></div>
+        <small>${detail}</small>
+      </div>
     </div>`;
 }
 

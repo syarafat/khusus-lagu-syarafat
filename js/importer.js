@@ -2,7 +2,7 @@
 import { store, uid } from './store.js';
 import { readTags, guessFromFilename, cleanTitle } from './metadata.js';
 import { isYouTubeUrl } from './ytengine.js';
-import { isVideoFile, videoToMp3, captureFrame, ConvertError } from './convert.js';
+import { isVideoFile, videoToMp3, extractVideoCover, ConvertError } from './convert.js';
 
 export const AUDIO_EXT = ['mp3', 'm4a', 'aac', 'flac', 'wav', 'ogg', 'oga', 'opus', 'weba', 'aif', 'aiff', 'caf', 'amr', 'm4b'];
 
@@ -187,25 +187,28 @@ async function buildSong(file, extra = {}) {
   return { song, coverBlob };
 }
 
-/** Video → MP3: hanya suaranya yang disimpan, videonya tidak. */
-async function buildSongFromVideo(file, onProgress) {
+/**
+ * Video → MP3: sampul diambil lebih dulu (foto sampul di file, atau cuplikan terbaik),
+ * lalu suaranya diubah ke MP3. Videonya sendiri tidak disimpan.
+ */
+async function buildSongFromVideo(file, onProgress, onCover) {
   const tags = await readTags(file);
   const guess = guessFromFilename(file.name);
-  const { blob, duration } = await videoToMp3(file, onProgress);
 
+  onProgress(0, 'Mengambil sampul video');
   let coverBlob = null;
   let color = null;
-  onProgress(100, 'Membuat sampul');
-  const pic = tags.picture
-    ? new Blob([tags.picture.data], { type: tags.picture.mime })
-    : await captureFrame(file);
+  const pic = await extractVideoCover(file, tags);
   if (pic) {
     try {
       const res = await processCover(pic);
       coverBlob = res.blob;
       color = res.color;
+      onCover(coverBlob);
     } catch { /* tanpa sampul */ }
   }
+
+  const { blob, duration } = await videoToMp3(file, onProgress);
   const title = cleanTitle(tags.title) || guess.title;
   const artist = tags.artist || tags.albumArtist || guess.artist || 'Artis tidak dikenal';
   const base = file.name.replace(/\.[^.]+$/, '') || 'lagu';
@@ -249,6 +252,12 @@ export function onImportStatus(fn) {
 }
 function emitStatus() { statusListeners.forEach((fn) => fn({ ...status })); }
 
+/** Pratinjau sampul video yang sedang diproses (ditampilkan di kartu progres). */
+function setStatusCover(blob) {
+  if (status.cover) URL.revokeObjectURL(status.cover);
+  status.cover = blob ? URL.createObjectURL(blob) : null;
+}
+
 /**
  * Tambahkan banyak file. Mengembalikan ringkasan setelah semua selesai.
  * opts.playlistId: langsung masukkan ke playlist tersebut.
@@ -284,6 +293,7 @@ async function runLoop() {
       status.current = file.name;
       status.note = '';
       status.pct = 0;
+      setStatusCover(null);
       emitStatus();
       try {
         const dup = store.findDuplicate(file.name, file.size);
@@ -297,6 +307,9 @@ async function runLoop() {
             status.note = note;
             const now = Date.now();
             if (now - last > 200 || pct >= 100) { last = now; emitStatus(); }
+          }, (cover) => {
+            setStatusCover(cover);
+            emitStatus();
           });
           await store.addSong(song, audioBlob, coverBlob);
           status.added++;
@@ -333,6 +346,7 @@ async function runLoop() {
     status.running = false;
     status.current = '';
     status.note = '';
+    setStatusCover(null);
     emitStatus();
     const cbs = finishedCallbacks;
     finishedCallbacks = [];

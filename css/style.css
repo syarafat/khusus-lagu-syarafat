@@ -704,6 +704,10 @@ body.np-open .toasts { top: calc(64px + env(safe-area-inset-top)); bottom: auto 
 .import-status { position: fixed; right: 16px; bottom: calc(var(--player-h) + 16px); z-index: 90; width: 320px; }
 .imp { padding: 12px 14px; border-radius: 10px; background: #262630; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
 .imp.big { max-width: 760px; margin: 0 var(--gut) 16px; background: rgba(255, 255, 255, 0.05); box-shadow: none; }
+.imp.has-cover { display: flex; align-items: center; gap: 14px; }
+.imp-cover { flex: none; width: 56px; height: 56px; border-radius: 6px; object-fit: cover; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
+.imp.big .imp-cover { width: 72px; height: 72px; }
+.imp-main { flex: 1; min-width: 0; }
 .imp-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .imp-head .ic { width: 18px; height: 18px; color: var(--accent); }
 .imp-bar { height: 4px; margin: 10px 0 6px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }

@@ -1,6 +1,6 @@
 // Service worker: membuat aplikasi bisa dibuka tanpa internet & menerima file yang dibagikan.
 // Naikkan VERSION setiap kali file aplikasi diubah agar pengguna mendapat versi baru.
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 const CACHE = `lagu-${VERSION}`;
 const ASSETS = [
   './',

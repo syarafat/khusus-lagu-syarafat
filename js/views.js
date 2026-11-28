@@ -450,7 +450,7 @@ export function addView() {
       </div>
       <div class="convert-note">
         <div class="cn-ic">${icon('wave')}</div>
-        <div><b>Video otomatis diubah jadi MP3.</b> Hanya suaranya yang disimpan (videonya tidak), jadi hemat memori dan kamu cukup mendengarkan. Prosesnya berjalan di HP-mu sendiri tanpa internet — biarkan aplikasi tetap terbuka sampai selesai.</div>
+        <div><b>Video otomatis diubah jadi MP3.</b> Foto sampulnya diambil dulu dari video (foto sampul bawaan file, atau cuplikan paling jelas), lalu hanya suaranya yang disimpan — videonya tidak, jadi hemat memori. Prosesnya berjalan di HP-mu sendiri tanpa internet; biarkan aplikasi tetap terbuka sampai selesai.</div>
       </div>
       <div id="importBox"></div>
 
